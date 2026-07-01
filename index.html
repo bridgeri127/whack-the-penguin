@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Whack the Penguin</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game" width="1200" height="600"></canvas>
+    <div id="overlay" class="screen intro-screen">
+      <h1 id="title">Whack the Penguin</h1>
+      <p id="subtitle">Press Space or Click to start</p>
+    </div>
+    <div id="result-panel" class="hidden">
+      <div id="distance-display"></div>
+      <div id="best-display"></div>
+      <button id="again-btn">Again</button>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
