@@ -1,6 +1,6 @@
-# Whack the Penguin — HTML5 Remake
+# Whack the Penguin — 3D Remake
 
-A modern HTML5 remake of the classic Flash game. A penguin jumps from a snowy ledge and the player controls a yeti who must time a club swing to whack the penguin as far as possible.
+A modern 3D remake of the classic Flash game. A penguin jumps from a snowy ledge and the player controls a yeti who must time a club swing to whack the penguin as far as possible. Built with Three.js and a stylized low-poly aesthetic.
 
 ## Game Flow
 
@@ -15,11 +15,32 @@ A modern HTML5 remake of the classic Flash game. A penguin jumps from a snowy le
 
 ## Tech
 
-- **Stack**: HTML5 Canvas + Vanilla JS + CSS, zero dependencies
-- **Files**: `index.html`, `style.css`, `game.js`
-- **Art**: Pixel art drawn via canvas primitives (no sprite sheets)
+- **Engine**: Three.js via CDN (ES module import)
+- **Stack**: WebGL + Vanilla JS + CSS, no build tools
+- **Art**: Procedural low-poly geometry (BoxGeometry, ConeGeometry, SphereGeometry), flat-shaded
+- **Models**: All built in code from Three.js primitives — zero external assets
 - **Physics**: Custom projectile motion (gravity, air friction, bounce damping)
-- **States**: 6-state game machine (INTRO → DROPPING → LAND_WOBBLE → READY → SWING → FLYING → LANDED)
+- **States**: 7-state game machine (INTRO → DROPPING → LAND_WOBBLE → READY → SWING → FLYING → LANDED)
+- **Rendering**: Perspective camera, three-point lighting, fog, procedural terrain
+
+## File Structure
+
+```
+penguin/
+├── index.html          -- Three.js import, renderer div, UI overlays
+├── style.css           -- Full-screen layout, overlay styling
+├── game.js             -- Entry point, game loop orchestrator
+└── src/
+    ├── constants.js    -- Shared constants (gravity, positions, colors)
+    ├── scene.js        -- Renderer, camera, lights, fog, sky
+    ├── environment.js  -- Terrain, cliff, mountains, distance markers
+    ├── penguin.js      -- Penguin character model (Group hierarchy)
+    ├── yeti.js         -- Yeti character model (Group hierarchy + club arm)
+    ├── physics.js      -- State machine, projectile motion, bounce logic
+    ├── camera.js       -- Camera positioning per state, lerp follow
+    ├── particles.js    -- Ambient snow, hit burst, bounce dust
+    └── animations.js   -- Squash/stretch, swing, wobble, eye tracking
+```
 
 ## Controls
 

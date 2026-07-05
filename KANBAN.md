@@ -1,21 +1,116 @@
-# Kanban Board
+# Kanban Board — 3D Remake
 
-## Backlog
+> **Current focus**: Rebuild the complete game in Three.js with low-poly aesthetic.
+> 2D version is complete and committed.
+
+---
+
+## Done (2D Version)
+
+- [x] Core game loop and 7-state machine
+- [x] HTML/CSS/JS scaffold (zero dependencies)
+- [x] Pixel art: penguin, yeti, cliff, terrain, mountains
+- [x] Penguin drop animation with squash-and-stretch
+- [x] Landing wobble recovery
+- [x] Timing bar with gradient zones
+- [x] Yeti club swing animation
+- [x] Launch physics (projectile motion, gravity, bounces)
+- [x] Particle effects (hit burst, snow burst, bounce dust)
+- [x] Falling snow particles and parallax mountains
+- [x] Camera follow during flight
+- [x] Distance tracking with localStorage high score
+- [x] Space/click/touch input
+- [x] Git repo + GitHub push
+- [x] PROJECT.md documentation and Kanban board
+
+---
+
+## Done (3D Remake)
+
+_(progress tracked here as implementation proceeds)_
+
+---
+
+## In Progress
+
+_(nothing yet — starting Phase 1)_
+
+---
+
+## Backlog (3D Remake — In Order)
+
+### Phase 1: Foundation
+- [ ] 1.1 Update `index.html` — remove canvas, add `#renderer` div, ES module imports
+- [ ] 1.2 Update `style.css` — full-screen WebGL renderer, preserve UI overlay styles
+- [ ] 1.3 Create `src/constants.js` — port all constants with 3D coordinate mappings
+- [ ] 1.4 Create `src/scene.js` — renderer, perspective camera, lights, fog, sky
+- [ ] 1.5 Wire `game.js` as entry point — init scene, render loop, verify display
+
+### Phase 2: Environment
+- [ ] 2.1 Terrain mesh — PlaneGeometry with sine-wave vertex displacement
+- [ ] 2.2 Cliff — Group: rock face, snow cap, ledge platform, icicle cones
+- [ ] 2.3 Mountains — two layers of ConeGeometry peaks with snow caps
+- [ ] 2.4 Distance markers — posts every 100 units, labeled every 200
+- [ ] 2.5 Light/fog pass — tune warm sun, cool fill, ambient until scene reads well
+
+### Phase 3: Characters
+- [ ] 3.1 Penguin model — Group: body, belly, head, eyes/pupils, beak, flippers, feet
+- [ ] 3.2 Yeti model — Group: torso, head (eyes, brows, mouth), legs, fur details
+- [ ] 3.3 Club arm — pivot group: arm segment, handle, club head, grip details
+- [ ] 3.4 Position both characters and verify from camera angle
+
+### Phase 4: Gameplay Loop
+- [ ] 4.1 Port state machine — 7 states with transitions
+- [ ] 4.2 Port input handling — space/click/touch per state
+- [ ] 4.3 Port drop animation — pause on ledge, hop, gravity fall, stretch
+- [ ] 4.4 Port landing wobble — damped sine rotation
+- [ ] 4.5 Port timing bar — oscillating value, gradient zones
+- [ ] 4.6 Port swing animation — club arm rotation lerp
+- [ ] 4.7 Port launch physics — power curve, angle mapping, projectile motion
+- [ ] 4.8 Port bounce logic — ground collision, energy damping, settle condition
+- [ ] 4.9 End-to-end test — full loop from INTRO to LANDED and reset
+
+### Phase 5: Camera & Animations
+- [ ] 5.1 Static camera framing for INTRO/READY states
+- [ ] 5.2 Flight camera — lerp follow (6/s x, 4/s y) with look-ahead
+- [ ] 5.3 Landed camera — slow settle (1.5/s) on final position
+- [ ] 5.4 Penguin squash/stretch — volume-preserving scale on body group
+- [ ] 5.5 Penguin flight spin — rotation.z during flight
+- [ ] 5.6 Yeti eye tracking — pupils translate toward penguin
+- [ ] 5.7 Yeti mouth states — neutral/strain/excitement visibility toggles
+- [ ] 5.8 Yeti idle breathing — subtle body bob
+
+### Phase 6: Particles & Effects
+- [ ] 6.1 Ambient snow — Points system, 50 particles, drift/sway/wrap
+- [ ] 6.2 Hit burst — 15 radial particles (gold/orange/red/white) at impact
+- [ ] 6.3 Snow burst — 12 upward particles on initial landing
+- [ ] 6.4 Bounce dust — 8 pale particles at each ground bounce
+- [ ] 6.5 Particle texture — radial gradient canvas texture for sprites
+
+### Phase 7: UI & Polish
+- [ ] 7.1 Intro overlay — title, prompt text, state-driven visibility
+- [ ] 7.2 Result panel — distance display, best score, Again button
+- [ ] 7.3 localStorage high score persistence
+- [ ] 7.4 Timing bar as HTML overlay projected to screen space
+- [ ] 7.5 Screen shake on impact — brief camera offset
+- [ ] 7.6 Mobile responsiveness — resize handler, touch input, canvas scaling
+
+---
+
+## Backlog (Post-Launch Polish)
 
 ### Motion & Feel
-- [ ] Club-to-penguin contact visual — ensure club head overlaps penguin at impact frame
-- [ ] Swing timing tuning — adjust oscillation speed and swing duration for better feel
+- [ ] Club-to-penguin contact tuning — verify club head overlaps penguin in 3D
+- [ ] Swing timing tuning — adjust oscillation speed and swing duration
 - [ ] Launch trajectory tuning — verify angles and power curve feel satisfying
-- [ ] Screen shake on impact
 - [ ] Slow-mo effect during the whack moment
 
 ### Visual Polish
 - [ ] Trail/sparkle effect on penguin during flight
 - [ ] Impact flash frame at contact point
-- [ ] Yeti idle animation (breathing, shifting weight)
 - [ ] Penguin idle animation on ledge (looking down, shivering)
-- [ ] Better distance markers with flagposts on terrain
 - [ ] Landing crater / snow imprint where penguin stops
+- [ ] Better distance markers with flagposts on terrain
 
 ### Audio
 - [ ] Sound effects: windup, swing whoosh, impact thwack, bounce boings, landing thud
@@ -26,30 +121,7 @@
 - [ ] Score callouts ("Nice!", "Great shot!", "Incredible!", "New record!")
 - [ ] Replay best distance arrow on terrain during flight
 
-### Polish
-- [ ] Mobile responsiveness (scale canvas, prevent scroll)
+### Features
 - [ ] Multiple rounds tracking (top 3 distances, average)
 - [ ] Share result button (copy text to clipboard)
 - [ ] Title screen animation (penguin silhouette on ledge, snow)
-
-## In Progress
-
-_(nothing currently in progress — pick from backlog)_
-
-## Done
-
-- [x] Core game loop and state machine
-- [x] HTML/CSS/JS scaffold (zero dependencies)
-- [x] Pixel art: penguin, yeti, cliff, terrain, mountains
-- [x] Penguin drop animation with squash-and-stretch
-- [x] Landing wobble recovery
-- [x] Timing bar with gradient zones
-- [x] Yeti club swing animation
-- [x] Launch physics (projectile motion, gravity, bounces)
-- [x] Particle effects (hit burst, snow burst, bounce dust)
-- [x] Falling snow particles
-- [x] Parallax mountain backgrounds
-- [x] Camera follow during flight
-- [x] Distance tracking with localStorage high score
-- [x] Space/click/touch input
-- [x] Git repo + GitHub push
