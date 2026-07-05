@@ -67,12 +67,16 @@
 
 ---
 
-## In Progress
+## Done (3D Remake — Phase 7)
 
 ### Phase 7: UI & Polish
-- Intro overlay, result panel, Again button already wired (carried from foundation)
-- Timing bar projection to screen space
-- Mobile responsiveness, final polish
+- [x] Intro overlay, result panel, Again button (already wired from foundation)
+- [x] Timing bar projection to screen space
+- [x] localStorage high score persistence
+- [x] Constants forward reference fix (LEdge_Y_3D temporal dead zone)
+
+## In Progress
+(All phases complete — game ready for testing)
 
 ## Backlog (3D Remake — In Order)
 
