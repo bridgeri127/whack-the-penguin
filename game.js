@@ -7,15 +7,30 @@ const ctx = canvas.getContext('2d');
 const overlay = document.getElementById('overlay');
 
 // --- Constants ---
-const STATES = { INTRO: 0, FALLING: 1, FLYING: 2, LANDED: 3 };
+const STATES = {
+  INTRO: 0,
+  DROPPING: 1,   // Penguin jumps from ledge, falls to ground in front of yeti
+  LAND_WOBBLE: 2, // Penguin bounces/wobbles after landing
+  READY: 3,      // Timing bar active, player can swing
+  SWING: 4,      // Yeti is swinging (club animation)
+  FLYING: 5,     // Penguin flying through air
+  LANDED: 6,     // Result shown
+};
+
 const GRAVITY = 900;
-const BOUNCE_DAMPING = 0.4;
-const MAX_POWER = 1300;
+const BOUNCE_DAMPING = 0.35;
+const MAX_POWER = 1400;
 const GROUND_BASE = 520;
-const PLEdge_X = 60;
-const PLEdge_Y = 130;
-const YETI_X = 150;
-const YETI_Y = 470;
+
+// Scene layout
+const LEDGE_X = 30;
+const LEDGE_Y = 130;
+const PENGUIN_START = { x: LEDGE_X + 25, y: LEDGE_Y - 32 };
+const YETI_X = 170;
+const YETI_Y = 490;
+// Penguin lands here (in front of yeti)
+const LAND_X = 120;
+const LAND_Y = GROUND_BASE - 32 - Math.sin(LAND_X * 0.005) * 18 - Math.sin(LAND_X * 0.021) * 6;
 
 // --- Game State ---
 let state = STATES.INTRO;
@@ -25,18 +40,25 @@ let yeti = {};
 let timing = { value: 0, phase: 0 };
 let particles = [];
 let snowflakes = [];
+let swingTimer = 0;
+let wobbleTimer = 0;
+let dropTimer = 0;
 
 // --- Init ---
 function resetPenguin() {
   return {
-    x: PLEdge_X + 20,
-    y: PLEdge_Y - 32,
+    x: PENGUIN_START.x,
+    y: PENGUIN_START.y,
+    targetX: LAND_X,
+    targetY: LAND_Y,
     vx: 0,
     vy: 0,
     rotation: 0,
     bounceCount: 0,
     hurt: false,
-    stunned: 0,
+    wobble: 0,
+    squash: 1,
+    launchX: 0,
   };
 }
 
@@ -44,9 +66,12 @@ function resetGame() {
   state = STATES.INTRO;
   cameraX = 0;
   penguin = resetPenguin();
-  yeti = { swingAngle: -0.5, swingTarget: -0.5 };
+  yeti = { swingAngle: -1.2, swingTarget: -1.2, prepared: false };
   timing = { value: 0, phase: 0 };
   particles = [];
+  swingTimer = 0;
+  wobbleTimer = 0;
+  dropTimer = 0;
 
   overlay.classList.remove('hidden');
   document.getElementById('title').textContent = 'Whack the Penguin';
@@ -70,7 +95,6 @@ function drawSky() {
 }
 
 function drawMountains() {
-  // Far mountains (parallax)
   ctx.fillStyle = '#c8dce8';
   ctx.beginPath();
   ctx.moveTo(0, 420);
@@ -83,7 +107,6 @@ function drawMountains() {
   ctx.lineTo(0, 520);
   ctx.fill();
 
-  // Near mountains
   ctx.fillStyle = '#d8e8f0';
   ctx.beginPath();
   ctx.moveTo(0, 440);
@@ -98,20 +121,17 @@ function drawMountains() {
 }
 
 function drawGround() {
-  // Main ground
   ctx.fillStyle = '#f4f4f4';
   ctx.beginPath();
   ctx.moveTo(-10, 600);
   for (let sx = -10; sx <= 1210; sx += 4) {
     const wx = sx + cameraX;
     if (wx < 0) continue;
-    const ty = getTerrainY(wx);
-    ctx.lineTo(sx, ty);
+    ctx.lineTo(sx, getTerrainY(wx));
   }
   ctx.lineTo(1210, 600);
   ctx.fill();
 
-  // Snow surface line
   ctx.strokeStyle = '#d0d8e0';
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -127,46 +147,47 @@ function drawGround() {
 }
 
 function drawCliff() {
-  const cx = PLEdge_X - 30 - cameraX;
+  const cx = LEDGE_X - 25 - cameraX;
 
   // Rock face
   ctx.fillStyle = '#8b7355';
-  ctx.fillRect(cx, 0, 80, GROUND_BASE + 10);
+  ctx.fillRect(cx, 0, 75, GROUND_BASE + 10);
 
   // Rocky texture
   ctx.fillStyle = '#7a6348';
   for (let i = 0; i < 12; i++) {
-    const rx = cx + 5 + ((i * 31) % 60);
+    const rx = cx + 5 + ((i * 31) % 55);
     const ry = 40 + ((i * 53) % (GROUND_BASE - 40));
     ctx.fillRect(rx, ry, 10 + (i % 5) * 3, 6);
   }
 
   // Snow cap
   ctx.fillStyle = '#fff';
-  ctx.fillRect(cx, 0, 80, 24);
+  ctx.fillRect(cx, 0, 75, 24);
 
   // Ledge platform
   ctx.fillStyle = '#6b5b45';
-  ctx.fillRect(cx, PLEdge_Y, 120, 16);
+  ctx.fillRect(cx, LEDGE_Y, 100, 16);
 
   // Snow on ledge
   ctx.fillStyle = '#f0f0f0';
-  ctx.fillRect(cx, PLEdge_Y, 120, 6);
+  ctx.fillRect(cx, LEDGE_Y, 100, 6);
 
-  // Icicles under ledge
+  // Icicles
   ctx.fillStyle = '#c8e8f8';
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 4; i++) {
     const ix = cx + 10 + i * 22;
     const ih = 6 + (i % 3) * 4;
-    ctx.fillRect(ix, PLEdge_Y + 16, 4, ih);
+    ctx.fillRect(ix, LEDGE_Y + 16, 4, ih);
   }
 }
 
-function drawPenguin(x, y, rotation) {
+function drawPenguin(x, y, rotation, squash, wobble) {
   const sx = x - cameraX;
   ctx.save();
   ctx.translate(sx + 16, y + 20);
-  ctx.rotate(rotation);
+  ctx.rotate(rotation + wobble * 0.15);
+  ctx.scale(2 - squash, squash); // squash and stretch
   ctx.translate(-(sx + 16), -(y + 20));
 
   // Body
@@ -179,12 +200,24 @@ function drawPenguin(x, y, rotation) {
   drawBlock(sx + 10, y + 14, 12, 10);
 
   // Eyes
-  ctx.fillStyle = '#fff';
-  drawBlock(sx + 8, y + 8, 6, 6);
-  drawBlock(sx + 18, y + 8, 6, 6);
-  ctx.fillStyle = '#000';
-  drawBlock(sx + 10, y + 10, 3, 3);
-  drawBlock(sx + 20, y + 10, 3, 3);
+  if (penguin.hurt) {
+    // X eyes
+    ctx.fillStyle = '#fff';
+    drawBlock(sx + 8, y + 8, 6, 6);
+    drawBlock(sx + 18, y + 8, 6, 6);
+    ctx.fillStyle = '#ff0000';
+    drawBlock(sx + 9, y + 9, 2, 2);
+    drawBlock(sx + 13, y + 9, 2, 2);
+    drawBlock(sx + 19, y + 9, 2, 2);
+    drawBlock(sx + 23, y + 9, 2, 2);
+  } else {
+    ctx.fillStyle = '#fff';
+    drawBlock(sx + 8, y + 8, 6, 6);
+    drawBlock(sx + 18, y + 8, 6, 6);
+    ctx.fillStyle = '#000';
+    drawBlock(sx + 10, y + 10, 3, 3);
+    drawBlock(sx + 20, y + 10, 3, 3);
+  }
 
   // Beak
   ctx.fillStyle = '#ff8c00';
@@ -192,26 +225,19 @@ function drawPenguin(x, y, rotation) {
 
   // Flippers
   ctx.fillStyle = '#1a1a2e';
-  drawBlock(sx - 2, y + 14, 8, 12);
-  drawBlock(sx + 26, y + 14, 8, 12);
+  if (state === STATES.DROPPING) {
+    // Flippers out during fall
+    drawBlock(sx - 4, y + 10, 8, 10);
+    drawBlock(sx + 28, y + 10, 8, 10);
+  } else {
+    drawBlock(sx - 2, y + 14, 8, 12);
+    drawBlock(sx + 26, y + 14, 8, 12);
+  }
 
   // Feet
   ctx.fillStyle = '#ff8c00';
   drawBlock(sx + 8, y + 26, 6, 5);
   drawBlock(sx + 18, y + 26, 6, 5);
-
-  // Hurt expression
-  if (penguin.hurt) {
-    ctx.fillStyle = '#ff4444';
-    drawBlock(sx + 10, y + 18, 4, 3);
-    drawBlock(sx + 18, y + 18, 4, 3);
-    // X eyes
-    ctx.fillStyle = '#ff0000';
-    drawBlock(sx + 9, y + 9, 2, 2);
-    drawBlock(sx + 13, y + 9, 2, 2);
-    drawBlock(sx + 19, y + 9, 2, 2);
-    drawBlock(sx + 23, y + 9, 2, 2);
-  }
 
   ctx.restore();
 }
@@ -239,13 +265,15 @@ function drawYeti(x, y, swingAngle) {
   drawBlock(sx + 20, y - 58, 4, 8);
   drawBlock(sx + 26, y - 56, 4, 6);
 
-  // Eyes
+  // Eyes (look at penguin)
   ctx.fillStyle = '#fff';
   drawBlock(sx + 14, y - 46, 6, 6);
   drawBlock(sx + 22, y - 46, 6, 6);
   ctx.fillStyle = '#222';
-  drawBlock(sx + 16, y - 44, 3, 3);
-  drawBlock(sx + 24, y - 44, 3, 3);
+  // Pupils track penguin
+  const penguinDir = penguin.x > x ? 0 : -2;
+  drawBlock(sx + 16 + penguinDir, y - 44, 3, 3);
+  drawBlock(sx + 24 + penguinDir, y - 44, 3, 3);
 
   // Angry brows
   ctx.fillStyle = '#888';
@@ -259,6 +287,11 @@ function drawYeti(x, y, swingAngle) {
     drawBlock(sx + 16, y - 38, 10, 5);
     ctx.fillStyle = '#ff4444';
     drawBlock(sx + 18, y - 36, 6, 3);
+  } else if (state === STATES.SWING) {
+    // Straining
+    drawBlock(sx + 16, y - 38, 10, 6);
+    ctx.fillStyle = '#ff4444';
+    drawBlock(sx + 18, y - 36, 6, 4);
   } else {
     drawBlock(sx + 17, y - 36, 8, 3);
   }
@@ -278,34 +311,34 @@ function drawYeti(x, y, swingAngle) {
   drawBlock(sx, y - 16, 6, 10);
   drawBlock(sx + 34, y - 16, 6, 10);
 
-  // Club arm (swings)
+  // Club arm (swings) — drawn LAST so it's on top
   ctx.save();
-  ctx.translate(sx + 36, y - 28);
+  ctx.translate(sx + 2, y - 24); // pivot on left side of yeti (reaches toward penguin)
   ctx.rotate(swingAngle);
 
   // Arm
   ctx.fillStyle = '#b8b8b8';
-  drawBlock(0, -3, 18, 7);
+  drawBlock(-2, -3, 18, 7);
 
-  // Club
+  // Club handle
   ctx.fillStyle = '#8b4513';
-  drawBlock(16, -5, 22, 10);
+  drawBlock(14, -4, 18, 8);
 
   // Club head
   ctx.fillStyle = '#6b3410';
-  drawBlock(32, -7, 12, 14);
+  drawBlock(28, -7, 14, 14);
 
   // Club detail
   ctx.fillStyle = '#5a2d0c';
-  drawBlock(34, -5, 3, 10);
-  drawBlock(40, -5, 3, 10);
+  drawBlock(32, -5, 3, 10);
+  drawBlock(38, -5, 3, 10);
 
   ctx.restore();
 }
 
 function drawTimingBar() {
   const sx = YETI_X - cameraX;
-  const barY = YETI_Y - 80;
+  const barY = YETI_Y - 90;
   const w = 130;
   const h = 14;
 
@@ -313,19 +346,18 @@ function drawTimingBar() {
   ctx.fillStyle = 'rgba(0,0,0,0.6)';
   ctx.fillRect(sx - w/2, barY, w, h);
 
-  // Zones
-  // Left (early - red)
+  // Left zone (early)
   const lg = ctx.createLinearGradient(sx - w/2, 0, sx - 8, 0);
   lg.addColorStop(0, '#cc3333');
   lg.addColorStop(1, '#dd8833');
   ctx.fillStyle = lg;
   ctx.fillRect(sx - w/2, barY, w/2 - 8, h);
 
-  // Center (perfect - green)
+  // Center (perfect)
   ctx.fillStyle = '#44dd66';
   ctx.fillRect(sx - 10, barY, 20, h);
 
-  // Right (late - red)
+  // Right zone (late)
   const rg = ctx.createLinearGradient(sx + 10, 0, sx + w/2, 0);
   rg.addColorStop(0, '#dd8833');
   rg.addColorStop(1, '#cc3333');
@@ -349,9 +381,7 @@ function drawTimingBar() {
   ctx.fillStyle = '#fff';
   ctx.font = '10px Courier New';
   ctx.textAlign = 'center';
-  ctx.fillText('EARLY', sx - w/2 + 28, barY + h + 12);
-  ctx.fillText('PERFECT', sx, barY + h + 12);
-  ctx.fillText('LATE', sx + w/2 - 26, barY + h + 12);
+  ctx.fillText('WHACK!', sx, barY + h + 14);
 }
 
 function drawDistanceMarkers() {
@@ -363,7 +393,9 @@ function drawDistanceMarkers() {
     const ty = getTerrainY(d);
     ctx.fillStyle = '#999';
     ctx.fillRect(sx, ty, 2, 10);
-    ctx.fillText(`${d}`, sx, ty + 20);
+    if (d % 200 === 0) {
+      ctx.fillText(`${d}`, sx, ty + 20);
+    }
   }
 }
 
@@ -386,38 +418,46 @@ function drawSnow() {
   ctx.globalAlpha = 1;
 }
 
-function drawTip() {
-  if (state === STATES.FLYING || state === STATES.LANDED) {
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = '11px Courier New';
-    ctx.textAlign = 'left';
-    ctx.fillText('Space/Click to play again', 20, 30);
-  }
-}
-
 // --- Particles ---
 function spawnHitParticles(x, y) {
-  for (let i = 0; i < 20; i++) {
+  // Impact stars
+  for (let i = 0; i < 15; i++) {
+    const angle = (Math.PI * 2 / 15) * i;
+    const speed = 150 + Math.random() * 200;
     particles.push({
-      x: x + Math.random() * 20 - 10,
-      y: y + Math.random() * 20 - 10,
-      vx: (Math.random() - 0.5) * 300,
-      vy: (Math.random() - 0.5) * 300 - 100,
-      size: 2 + Math.random() * 4,
-      color: ['#fff', '#ff8c00', '#ff4444', '#ffd700'][Math.floor(Math.random() * 4)],
+      x: x + 12,
+      y: y + 12,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      size: 3 + Math.random() * 4,
+      color: ['#ffd700', '#ff8c00', '#ff4444', '#fff'][Math.floor(Math.random() * 4)],
       life: 1,
     });
   }
   // Snow burst
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 12; i++) {
     particles.push({
-      x: x + Math.random() * 30,
-      y: y + 20,
-      vx: (Math.random() - 0.3) * 200,
-      vy: -Math.random() * 200,
+      x: x + Math.random() * 24,
+      y: y + Math.random() * 20,
+      vx: (Math.random() - 0.3) * 250,
+      vy: -Math.random() * 250,
       size: 2 + Math.random() * 3,
       color: '#fff',
       life: 1,
+    });
+  }
+}
+
+function spawnLandParticles(x, y) {
+  for (let i = 0; i < 8; i++) {
+    particles.push({
+      x: x + Math.random() * 24,
+      y: y + 28,
+      vx: (Math.random() - 0.5) * 120,
+      vy: -Math.random() * 80,
+      size: 2 + Math.random() * 3,
+      color: '#e8f0f8',
+      life: 0.8,
     });
   }
 }
@@ -466,69 +506,147 @@ function updateSnow(dt) {
     s.y += s.speed * dt;
     s.x += Math.sin(s.y * 0.02) * 20 * dt;
     if (s.y > 600) {
-      s.y = -5;
-      s.x = Math.random() * 1200;
+        s.y = -5;
+        s.x = Math.random() * 1200;
     }
   });
 }
 
 // --- Game Logic ---
-function startFalling() {
-  state = STATES.FALLING;
+function startGame() {
+  state = STATES.DROPPING;
   overlay.classList.add('hidden');
+  penguin.vx = 0;
   penguin.vy = 0;
+  penguin.squash = 1;
+  penguin.wobble = 0;
+  penguin.hurt = false;
+  dropTimer = 0;
+  yeti.swingTarget = -1.2; // wind back
   timing.phase = 0;
-  yeti.swingTarget = -Math.PI / 3;
 }
 
 function triggerSwing() {
+  state = STATES.SWING;
+  swingTimer = 0;
+  yeti.swingTarget = 1.0; // swing forward
+}
+
+function launchPenguin() {
   const t = timing.value; // -1 to 1
 
-  // Power curve: cosine falloff from center
+  // Power: cosine falloff from center
   const power = Math.cos(t * Math.PI / 2);
 
-  // Angle: -25° (up) at left edge, ~40° at center, +35° (down) at right
-  const angleDeg = 40 - t * 65;
+  // Angle: varies with timing
+  const angleDeg = 35 - t * 55;
   const angle = (angleDeg * Math.PI) / 180;
 
-  const speed = power * MAX_POWER + 150;
+  const speed = power * MAX_POWER + 200;
   penguin.vx = Math.cos(angle) * speed;
   penguin.vy = -Math.sin(angle) * speed;
   penguin.hurt = true;
+  penguin.squash = 0.6; // squish on impact
   penguin.rotation = 0;
+  penguin.launchX = penguin.x;
 
   spawnHitParticles(penguin.x, penguin.y);
 
   state = STATES.FLYING;
-  yeti.swingTarget = Math.PI / 4;
+  penguin.bounceCount = 0;
 }
 
 // --- Update ---
 function update(dt) {
-  // Smooth yeti swing animation
-  yeti.swingAngle += (yeti.swingTarget - yeti.swingAngle) * dt * 10;
+  // Smooth yeti swing
+  const swingSpeed = state === STATES.SWING ? 14 : 6;
+  yeti.swingAngle += (yeti.swingTarget - yeti.swingAngle) * dt * swingSpeed;
 
-  if (state === STATES.FALLING) {
-    // Penguin falls
-    penguin.vy += GRAVITY * dt;
-    penguin.y += penguin.vy * dt;
+  // ---- DROPPING ----
+  if (state === STATES.DROPPING) {
+    dropTimer += dt;
 
-    // Timing bar oscillation
-    timing.phase += 2.8 * dt;
-    timing.value = Math.sin(timing.phase);
+    // Delayed start (dramatic pause on ledge)
+    if (dropTimer < 0.5) {
+      // Standing on ledge, doing nothing
+    } else {
+      // Jump off and arc toward landing spot
+      const fallT = (dropTimer - 0.5);
 
-    // Safety net: auto-hit if penguin falls past
-    if (penguin.y > 560) {
-      triggerSwing();
+      // Horizontal: move toward landing spot
+      penguin.x = PENGUIN_START.x + (LAND_X - PENGUIN_START.x) * Math.min(fallT * 1.2, 1);
+
+      // Vertical: free fall with slight jump
+      if (fallT < 0.15) {
+        // Small hop up
+        penguin.vy = -200;
+        penguin.vy += GRAVITY * dt;
+        penguin.y += penguin.vy * dt;
+      } else {
+        penguin.vy += GRAVITY * dt;
+        penguin.y += penguin.vy * dt;
+
+        // Squash on landing
+        if (penguin.y + 32 >= LAND_Y) {
+          penguin.y = LAND_Y;
+          penguin.vy = 0;
+          penguin.vx = 0;
+          penguin.squash = 1.35; // squished flat
+          spawnLandParticles(penguin.x, penguin.y);
+          state = STATES.LAND_WOBBLE;
+          wobbleTimer = 0;
+        }
+      }
+
+      // Stretch during fall
+      if (penguin.vy > 100) {
+        penguin.squash = Math.min(1.3, 1 + penguin.vy * 0.0003);
+      }
     }
   }
 
+  // ---- LAND WOBBLE ----
+  if (state === STATES.LAND_WOBBLE) {
+    wobbleTimer += dt;
+
+    // Recover squash
+    penguin.squash += (1 - penguin.squash) * dt * 10;
+
+    // Wobble back and forth
+    penguin.wobble = Math.sin(wobbleTimer * 20) * Math.exp(-wobbleTimer * 5);
+
+    if (wobbleTimer > 0.8) {
+      state = STATES.READY;
+      penguin.squash = 1;
+      penguin.wobble = 0;
+    }
+  }
+
+  // ---- READY ----
+  if (state === STATES.READY) {
+    timing.phase += 2.8 * dt;
+    timing.value = Math.sin(timing.phase);
+  }
+
+  // ---- SWING ----
+  if (state === STATES.SWING) {
+    swingTimer += dt;
+
+    // Check if club reached penguin (swing is about 0.25s to forward position)
+    if (swingTimer > 0.25) {
+      launchPenguin();
+    }
+  }
+
+  // ---- FLYING ----
   if (state === STATES.FLYING) {
-    // Physics
     penguin.vy += GRAVITY * dt;
     penguin.x += penguin.vx * dt;
     penguin.y += penguin.vy * dt;
     penguin.rotation += dt * 6;
+
+    // Recover squash
+    penguin.squash += (1 - penguin.squash) * dt * 8;
 
     // Ground collision
     const terrainY = getTerrainY(penguin.x);
@@ -538,17 +656,19 @@ function update(dt) {
       spawnBounceParticles(penguin.x, terrainY);
 
       if (penguin.bounceCount >= 4 || Math.abs(penguin.vy) < 80) {
-        // Landed!
         state = STATES.LANDED;
         penguin.vx = 0;
         penguin.vy = 0;
         penguin.hurt = false;
+        penguin.rotation = 0;
+        penguin.squash = 1.2; // final squash
         showResult();
         return;
       }
 
       penguin.vy = -Math.abs(penguin.vy) * BOUNCE_DAMPING;
-      penguin.vx *= 0.65;
+      penguin.vx *= 0.6;
+      penguin.squash = 1.3; // squash on bounce
     }
 
     // Camera follows
@@ -557,17 +677,12 @@ function update(dt) {
     if (cameraX < 0) cameraX = 0;
   }
 
+  // ---- LANDED ----
   if (state === STATES.LANDED) {
-    // Gentle camera pan to show landing spot
+    penguin.squash += (1 - penguin.squash) * dt * 5;
     const targetCam = penguin.x - 300;
     cameraX += (targetCam - cameraX) * dt * 1.5;
     if (cameraX < 0) cameraX = 0;
-  }
-
-  // Reset hurt expression after a bit
-  if (penguin.hurt && state === STATES.FLYING) {
-    penguin.stunned += dt;
-    if (penguin.stunned > 2) penguin.hurt = false;
   }
 
   updateParticles(dt);
@@ -575,7 +690,7 @@ function update(dt) {
 }
 
 function showResult() {
-  const distance = Math.max(0, Math.floor(penguin.x - (PLEdge_X + 20)));
+  const distance = Math.max(0, Math.floor(penguin.x - LAND_X));
   const best = parseInt(localStorage.getItem('whackPenguinBest') || '0');
 
   if (distance > best) {
@@ -592,8 +707,8 @@ function showResult() {
 // --- Input ---
 function handleInput() {
   if (state === STATES.INTRO) {
-    startFalling();
-  } else if (state === STATES.FALLING) {
+    startGame();
+  } else if (state === STATES.READY) {
     triggerSwing();
   } else if (state === STATES.LANDED) {
     resetGame();
@@ -607,10 +722,7 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-canvas.addEventListener('click', (e) => {
-  handleInput();
-});
-
+canvas.addEventListener('click', handleInput);
 canvas.addEventListener('touchstart', (e) => {
   e.preventDefault();
   handleInput();
@@ -632,14 +744,20 @@ function render() {
   drawDistanceMarkers();
   drawSnow();
   drawYeti(YETI_X, YETI_Y, yeti.swingAngle);
-  drawPenguin(penguin.x, penguin.y, penguin.rotation);
+  drawPenguin(penguin.x, penguin.y, penguin.rotation, penguin.squash, penguin.wobble);
   drawParticles();
 
-  if (state === STATES.FALLING) {
+  if (state === STATES.READY) {
     drawTimingBar();
   }
 
-  drawTip();
+  // State-specific hints
+  if (state === STATES.INTRO) {
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.font = '14px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText('Time your swing to whack the penguin as far as possible!', 600, 560);
+  }
 }
 
 // --- Game Loop ---
