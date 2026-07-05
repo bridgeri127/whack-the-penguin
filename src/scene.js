@@ -45,7 +45,7 @@ export function createScene(container) {
   sun.shadow.mapSize.width = 2048;
   sun.shadow.mapSize.height = 2048;
   sun.shadow.camera.left = -200;
-  sun.shadow.camera.right = 2000;
+  sun.shadow.camera.right = 2600;
   sun.shadow.camera.top = 500;
   sun.shadow.camera.bottom = -100;
   sun.shadow.camera.far = 1000;
