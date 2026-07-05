@@ -16,14 +16,22 @@ body {
 
 #game-container {
   position: relative;
+  width: 1200px;
+  height: 600px;
   border: 4px solid #e0e0e0;
   border-radius: 4px;
-  image-rendering: pixelated;
+  overflow: hidden;
 }
 
-canvas {
+#renderer {
+  width: 100%;
+  height: 100%;
+}
+
+#renderer canvas {
   display: block;
-  background: #87ceeb;
+  width: 100%;
+  height: 100%;
 }
 
 #overlay {
@@ -38,11 +46,15 @@ canvas {
   align-items: center;
   background: rgba(0, 0, 0, 0.5);
   transition: opacity 0.3s;
+  pointer-events: none;
 }
 
 #overlay.hidden {
   opacity: 0;
-  pointer-events: none;
+}
+
+#overlay.screen {
+  pointer-events: auto;
 }
 
 #title {
@@ -75,6 +87,7 @@ canvas {
   padding: 20px 28px;
   text-align: center;
   color: #fff;
+  pointer-events: auto;
 }
 
 #result-panel.hidden {
@@ -108,4 +121,44 @@ canvas {
 
 #again-btn:hover {
   background: #fff;
+}
+
+#timing-bar-container {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+#timing-bar-container.hidden {
+  display: none;
+}
+
+#timing-bar {
+  position: relative;
+  width: 130px;
+  height: 14px;
+  border-radius: 3px;
+  background: linear-gradient(90deg,
+    #e74c3c 0%,
+    #e67e22 25%,
+    #2ecc71 45%,
+    #2ecc71 55%,
+    #e67e22 75%,
+    #e74c3c 100%
+  );
+  border: 2px solid #fff;
+  overflow: visible;
+}
+
+#timing-indicator {
+  position: absolute;
+  top: -4px;
+  width: 4px;
+  height: 22px;
+  background: #fff;
+  border: 1px solid #333;
+  border-radius: 2px;
+  transition: none;
 }

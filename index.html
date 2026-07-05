@@ -8,7 +8,7 @@
 </head>
 <body>
   <div id="game-container">
-    <canvas id="game" width="1200" height="600"></canvas>
+    <div id="renderer"></div>
     <div id="overlay" class="screen intro-screen">
       <h1 id="title">Whack the Penguin</h1>
       <p id="subtitle">Press Space or Click to start</p>
@@ -18,7 +18,19 @@
       <div id="best-display"></div>
       <button id="again-btn">Again</button>
     </div>
+    <div id="timing-bar-container" class="hidden">
+      <div id="timing-bar">
+        <div id="timing-indicator"></div>
+      </div>
+    </div>
   </div>
-  <script src="game.js"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"
+    }
+  }
+  </script>
+  <script type="module" src="game.js"></script>
 </body>
 </html>
