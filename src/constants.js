@@ -16,22 +16,21 @@ export const HORIZONTAL_DAMPING = 0.6; // energy retained per bounce (horizontal
 export const MAX_POWER = 1400;         // max launch speed component
 export const GROUND_BASE = 520;        // 2D canvas y for ground level
 
+// --- 3D Coordinate Helpers ---
+export function getTerrainY_3D(x) {
+  return Math.sin(x * 0.005) * 18 + Math.sin(x * 0.021) * 6;
+}
+
 // --- Scene Layout (2D → 3D mapping: y_3d = GROUND_BASE - y_2d) ---
+// Ledge height in 3D: 520 - 130 = 390
+export const LEDGE_Y_3D = GROUND_BASE - 130; // 390
 export const LEDGE_X = 30;
-export const LEDGE_Y = LEDGE_Y_3D;     // computed below
+export const LEDGE_Y = LEDGE_Y_3D;
 export const PENGUIN_START = { x: LEDGE_X + 25, y: LEDGE_Y_3D + 32 };
 export const YETI_X = 170;
 export const YETI_Y = 30;              // 520 - 490 = 30 above ground
 export const LAND_X = 120;
 export const LAND_Y = getTerrainY_3D(LAND_X);
-
-// Ledge height in 3D: 520 - 130 = 390
-export const LEDGE_Y_3D = GROUND_BASE - 130; // 390
-
-// --- 3D Coordinate Helpers ---
-export function getTerrainY_3D(x) {
-  return Math.sin(x * 0.005) * 18 + Math.sin(x * 0.021) * 6;
-}
 
 // --- Timing Bar ---
 export const TIMING_OSCILLATION_SPEED = 2.8; // radians per second for sin wave
