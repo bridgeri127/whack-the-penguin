@@ -1,25 +1,33 @@
-// Phase 4 stub — replaced when input handling is fully wired
-export function initInput(handlers) {
+import { STATES } from './constants.js';
+
+export function initInput(handlers, getState) {
+  function trigger() {
+    const state = getState();
+    switch (state) {
+      case STATES.INTRO:
+        handlers.onIntro();
+        break;
+      case STATES.READY:
+        handlers.onReady();
+        break;
+      case STATES.LANDED:
+        handlers.onLanded();
+        break;
+    }
+  }
+
   document.addEventListener('keydown', (e) => {
     if (e.code === 'Space') {
       e.preventDefault();
-      handlers.onIntro();
-      handlers.onReady();
-      handlers.onLanded();
+      trigger();
     }
   });
 
-  document.addEventListener('click', () => {
-    handlers.onIntro();
-    handlers.onReady();
-    handlers.onLanded();
-  });
+  document.addEventListener('click', trigger);
 
   document.addEventListener('touchstart', (e) => {
     if (e.target.tagName === 'BUTTON') return;
     e.preventDefault();
-    handlers.onIntro();
-    handlers.onReady();
-    handlers.onLanded();
+    trigger();
   }, { passive: false });
 }

@@ -120,14 +120,15 @@ function launchPenguin() {
 
   state = STATES.FLYING;
   bounceCount = 0;
+  penguin.userData.justLaunched = true;
 }
 
 // --- Input ---
 initInput({
-  onIntro: () => { if (state === STATES.INTRO) startGame(); },
-  onReady: () => { if (state === STATES.READY) triggerSwing(); },
-  onLanded: () => { if (state === STATES.LANDED) resetGame(); },
-});
+  onIntro: () => { startGame(); },
+  onReady: () => { triggerSwing(); },
+  onLanded: () => { resetGame(); },
+}, () => state);
 
 againBtn.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -253,6 +254,7 @@ function update(dt) {
         penguinVy = Math.abs(penguinVy) * BOUNCE_DAMPING;
         penguinVx *= HORIZONTAL_DAMPING;
         squash = 1.3;
+        penguin.userData.justBounced = true;
 
         if (bounceCount >= PENGUIN_SETTLE_BOUNCES || Math.abs(penguinVy) < PENGUIN_SETTLE_VY) {
           // Landed

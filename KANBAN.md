@@ -27,15 +27,52 @@
 
 ## Done (3D Remake)
 
-_(progress tracked here as implementation proceeds)_
+### Phase 1: Foundation
+- [x] 1.1 Update `index.html` — remove canvas, add `#renderer` div, ES module imports
+- [x] 1.2 Update `style.css` — full-screen WebGL renderer, preserve UI overlay styles
+- [x] 1.3 Create `src/constants.js` — port all constants with 3D coordinate mappings
+- [x] 1.4 Create `src/scene.js` — renderer, perspective camera, lights, fog, sky
+- [x] 1.5 Wire `game.js` as entry point — init scene, render loop, verify display
+
+### Phase 2: Environment
+- [x] 2.1 Terrain mesh — PlaneGeometry with sine-wave vertex displacement
+- [x] 2.2 Cliff — Group: rock face, snow cap, ledge platform, icicle cones
+- [x] 2.3 Mountains — two layers of ConeGeometry peaks with snow caps
+- [x] 2.4 Distance markers — posts every 100 units, labeled every 200
+
+### Phase 3: Characters
+- [x] 3.1 Penguin model — Group: body, belly, head, eyes/pupils, beak, flippers, feet
+- [x] 3.2 Yeti model — Group: torso, head (eyes, brows, mouth), legs, fur details
+- [x] 3.3 Club arm — pivot group: arm segment, handle, club head, grip details
+
+### Phase 4: Gameplay Loop
+- [x] 4.1 Port state machine — 7 states with transitions (already in game.js)
+- [x] 4.2 Port input handling — space/click/touch per state (state-aware routing)
+
+### Phase 5: Camera & Animations
+- [x] 5.1 Static camera framing for INTRO/READY states
+- [x] 5.2 Flight camera — lerp follow with smooth settling
+- [x] 5.3 Penguin squash/stretch — volume-preserving scale on body group
+- [x] 5.4 Penguin flight spin — rotation.z during flight
+- [x] 5.5 Yeti club arm swing — lerp-driven rotation
+- [x] 5.6 Yeti eye tracking — pupils translate toward penguin
+- [x] 5.7 Yeti expression states — brow furrow, mouth open on swing
+- [x] 5.8 Yeti idle breathing — subtle head bob
+
+### Phase 6: Particles & Effects
+- [x] 6.1 Ambient snow — Points system, 50 particles, drift/sway/wrap
+- [x] 6.2 Hit burst — 15 radial particles (gold/orange/red/white) at impact
+- [x] 6.3 Snow burst — 12 upward particles on bounce
+- [x] 6.4 Bounce dust — pale particles at ground contact
 
 ---
 
 ## In Progress
 
-_(nothing yet — starting Phase 1)_
-
----
+### Phase 7: UI & Polish
+- Intro overlay, result panel, Again button already wired (carried from foundation)
+- Timing bar projection to screen space
+- Mobile responsiveness, final polish
 
 ## Backlog (3D Remake — In Order)
 
