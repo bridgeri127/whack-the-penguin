@@ -71,6 +71,7 @@ let cameraTarget = { x: 0, y: 280, z: 500 };
 
 function resetPenguin() {
   penguin.position.set(PENGUIN_START.x, PENGUIN_START.y, 0);
+  penguin.rotation.set(0, 0, 0);
   penguinVx = 0;
   penguinVy = 0;
   squash = 1;
@@ -167,14 +168,14 @@ function update(dt) {
 
       // Hop forward and fall
       const fallTime = dropTimer - DROP_PAUSE;
-      if (fallTime <= 0.15) {
-        // Small hop
-        penguinVy = DROP_HOP_VY; // negative = up in 2D, but we're using 3D coords
+      if (fallTime < 0.016) {
+        // Small hop — set once at the start
+        penguinVy = DROP_HOP_VY;
       }
 
       // Move toward land position horizontally
-      const hopTime = Math.max(0, fallTime - 0.15);
-      const hopDuration = 0.83;
+      const hopTime = Math.max(0, fallTime - 0.016);
+      const hopDuration = 0.28;
       const t = Math.min(1, hopTime / hopDuration);
       penguin.position.x = PENGUIN_START.x + (LAND_X - PENGUIN_START.x) * t;
 

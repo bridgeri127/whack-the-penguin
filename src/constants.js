@@ -48,7 +48,7 @@ export const WOBBLE_DURATION = 0.8; // seconds
 
 // --- Drop ---
 export const DROP_PAUSE = 0.5;      // seconds on ledge before jumping
-export const DROP_HOP_VY = -200;    // initial small hop velocity (2D)
+export const DROP_HOP_VY = 400;     // initial upward hop velocity (3D: positive = up)
 export const DROP_STRETCH_RATE = 0.0003;
 
 // --- Camera ---
