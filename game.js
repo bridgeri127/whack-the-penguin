@@ -1,301 +1,534 @@
-import * as THREE from 'three';
-import { createScene } from './src/scene.js';
-import { createEnvironment } from './src/environment.js';
-import { createPenguin } from './src/penguin.js';
-import { createYeti } from './src/yeti.js';
-import { initParticles, updateParticles } from './src/particles.js';
-import { initInput } from './src/input.js';
+import * as THREE from "three";
+import { createScene } from "./src/scene.js";
+import { createEnvironment } from "./src/environment.js";
+import { createPenguin } from "./src/penguin.js";
+import { createYeti } from "./src/yeti.js";
+import { createCameraRig } from "./src/camera.js";
+import { createParticles } from "./src/particles.js";
+import { createAudio } from "./src/audio.js";
+import { createUI } from "./src/ui.js";
+import { initInput } from "./src/input.js";
+import { createFlight } from "./src/physics.js";
 import {
-  STATES, CANVAS_WIDTH, CANVAS_HEIGHT, GROUND_BASE,
-  PENGUIN_START, YETI_X, YETI_Y, LAND_X, LAND_Y,
-  DROP_PAUSE, DROP_HOP_VY, DROP_STRETCH_RATE,
-  TIMING_OSCILLATION_SPEED, SWING_WINDBACK, SWING_FORWARD,
-  SWING_SPEED_READY, SWING_SPEED_SWING, SWING_DURATION,
-  WOBBLE_DURATION, GRAVITY, BOUNCE_DAMPING, HORIZONTAL_DAMPING,
-  MAX_POWER, getTerrainY_3D, PENGUIN_SPIN_SPEED,
-  PENGUIN_SETTLE_BOUNCES, PENGUIN_SETTLE_VY,
-  SQUASH_RECOVERY_FAST, SQUASH_RECOVERY_SLOW,
-  CAMERA_FLY_LERP_X, CAMERA_FLY_LERP_Y, CAMERA_LANDED_LERP,
-} from './src/constants.js';
-import { updateCamera } from './src/camera.js';
-import { updateAnimations } from './src/animations.js';
+  CHARGE_DOWN_TIME,
+  CHARGE_UP_TIME,
+  DROP_GRAVITY,
+  DROP_VX,
+  DROP_VY,
+  PERFECT_MIN,
+  PENGUIN_LAND,
+  PENGUIN_LEDGE,
+  STATE,
+  STORAGE_BEST,
+  SWING_DURATION,
+  SWING_IMPACT_T,
+  YETI_POS,
+  getRank,
+} from "./src/constants.js";
+import { clamp, formatMeters, triangleWave } from "./src/utils.js";
 
-// --- DOM Elements ---
-const container = document.getElementById('renderer');
-const overlay = document.getElementById('overlay');
-const resultPanel = document.getElementById('result-panel');
-const distanceDisplay = document.getElementById('distance-display');
-const bestDisplay = document.getElementById('best-display');
-const againBtn = document.getElementById('again-btn');
-const timingBarContainer = document.getElementById('timing-bar-container');
-const timingIndicator = document.getElementById('timing-indicator');
+const LOOK_RIGHT = 1.12;
+const container = document.getElementById("stage");
+const game = createScene(container);
+const environment = createEnvironment(game.scene);
+const penguin = createPenguin();
+const yeti = createYeti();
+const particles = createParticles(game.scene);
+const audio = createAudio();
+const cameraRig = createCameraRig(game.camera);
 
-// --- Initialize Three.js Scene ---
-const { scene, camera, renderer } = createScene(container);
+game.scene.add(penguin.root);
+game.scene.add(yeti.root);
+yeti.root.position.set(YETI_POS.x, YETI_POS.y, YETI_POS.z);
 
-// --- Build Environment ---
-const environment = createEnvironment(scene);
+const flight = createFlight((event) => handleFlightEvent(event));
 
-// --- Build Characters ---
-const penguin = createPenguin(scene, PENGUIN_START.x, PENGUIN_START.y);
-const yeti = createYeti(scene, YETI_X, YETI_Y);
+const state = {
+  mode: STATE.TITLE,
+  modeTime: 0,
+  readyT: 0,
+  chargeT: 0,
+  power: 0,
+  perfect: false,
+  swingT: 0,
+  impactDone: false,
+  landT: 0,
+  resultT: 0,
+  distance: 0,
+  best: loadBest(),
+  newBest: false,
+  perfectHit: false,
+  dropVx: 0,
+  dropVy: 0,
+  trailTimer: 0,
+  sparkleTimer: 0,
+  round: 0,
+};
 
-// --- Particles ---
-const particles = initParticles(scene);
+let ui = null;
+let firstFrame = true;
 
-// --- Game State ---
-let state = STATES.INTRO;
-let bestDistance = parseFloat(localStorage.getItem('penguinBest') || '0');
-
-// Penguin physics state
-let penguinVx = 0;
-let penguinVy = 0;
-let squash = 1;
-let bounceCount = 0;
-
-// Timers
-let swingTimer = 0;
-let wobbleTimer = 0;
-let dropTimer = 0;
-
-// Timing bar
-let timing = { value: 0 };
-
-// Swing animation
-let swingAngle = 0;
-
-// Camera
-let cameraTarget = { x: 0, y: 280, z: 500 };
-
-// --- State Helpers ---
-
-function resetPenguin() {
-  penguin.position.set(PENGUIN_START.x, PENGUIN_START.y, 0);
-  penguin.rotation.set(0, 0, 0);
-  penguinVx = 0;
-  penguinVy = 0;
-  squash = 1;
-  bounceCount = 0;
-  dropTimer = 0;
-  swingTimer = 0;
-  wobbleTimer = 0;
-  timing = { value: 0 };
-  swingAngle = 0;
+function loadBest() {
+  try {
+    const value = Number(localStorage.getItem(STORAGE_BEST));
+    return Number.isFinite(value) ? clamp(value, 0, 9999) : 0;
+  } catch {
+    return 0;
+  }
 }
 
-function resetGame() {
-  state = STATES.INTRO;
-  resetPenguin();
-  overlay.classList.remove('hidden');
-  overlay.classList.add('screen');
-  resultPanel.classList.add('hidden');
-  timingBarContainer.classList.add('hidden');
-  cameraTarget = { x: 0, y: 280, z: 500 };
+function saveBest(value) {
+  try {
+    localStorage.setItem(STORAGE_BEST, String(value));
+  } catch {
+    // Storage is optional.
+  }
 }
 
-function startGame() {
-  state = STATES.DROPPING;
-  dropTimer = 0;
-  overlay.classList.add('hidden');
-  overlay.classList.remove('screen');
-  resultPanel.classList.add('hidden');
+function setMode(mode) {
+  state.mode = mode;
+  state.modeTime = 0;
 }
 
-function triggerSwing() {
-  state = STATES.SWING;
-  swingTimer = 0;
-  timingBarContainer.classList.add('hidden');
+function resetPenguinToLedge() {
+  penguin.reset();
+  penguin.root.visible = true;
+  penguin.root.position.set(PENGUIN_LEDGE.x, PENGUIN_LEDGE.y, PENGUIN_LEDGE.z);
+  penguin.root.rotation.set(0, 0, 0);
 }
 
-function launchPenguin() {
-  const power = Math.cos(timing.value * Math.PI / 2);
-  const angleDeg = 35 - timing.value * 55;
-  const angleRad = (angleDeg * Math.PI) / 180;
-  const speed = power * MAX_POWER + 200;
+function beginRound() {
+  audio.unlock();
+  audio.play("ui");
+  ui.hideTitle();
+  ui.hideResult();
+  ui.showCharge(false);
+  ui.showLive(false);
+  ui.setChargeActive(false);
+  ui.setHint("", false);
 
-  penguinVx = Math.cos(angleRad) * speed;
-  penguinVy = Math.sin(angleRad) * speed;
+  state.round += 1;
+  state.readyT = 0;
+  state.chargeT = 0;
+  state.power = 0;
+  state.perfect = false;
+  state.perfectHit = false;
+  state.swingT = 0;
+  state.impactDone = false;
+  state.landT = 0;
+  state.resultT = 0;
+  state.distance = 0;
+  state.newBest = false;
+  state.trailTimer = 0;
+  state.sparkleTimer = 0;
+  state.dropVx = 0;
+  state.dropVy = 0;
 
-  // Squash on impact
-  squash = 0.6;
-
-  state = STATES.FLYING;
-  bounceCount = 0;
-  penguin.userData.justLaunched = true;
+  flight.reset();
+  resetPenguinToLedge();
+  yeti.reset();
+  yeti.root.position.set(YETI_POS.x, YETI_POS.y, YETI_POS.z);
+  cameraRig.setMode("title");
+  setMode(STATE.DROP_READY);
 }
 
-// --- Input ---
-initInput({
-  onIntro: () => { startGame(); },
-  onReady: () => { triggerSwing(); },
-  onLanded: () => { resetGame(); },
-}, () => state);
+function startCharging() {
+  if (state.mode !== STATE.READY) return;
+  setMode(STATE.CHARGING);
+  state.chargeT = 0;
+  state.power = 0;
+  state.perfect = false;
+  audio.startCharge();
+  ui.setChargeActive(true);
+  ui.setHint("", false);
+  cameraRig.setMode("charge");
+}
 
-againBtn.addEventListener('click', (e) => {
-  e.stopPropagation();
-  resetGame();
+function releaseCharge() {
+  if (state.mode !== STATE.CHARGING) return;
+  state.perfect = state.power >= PERFECT_MIN;
+  state.perfectHit = state.perfect;
+  audio.stopCharge();
+  audio.play("swing", { power: state.power });
+  ui.setChargeActive(false);
+  ui.showCharge(false);
+  ui.showLive(true);
+  ui.updateLive(0, 0, "SWING");
+  ui.setHint("", false);
+  setMode(STATE.SWINGING);
+  state.swingT = 0;
+  state.impactDone = false;
+  cameraRig.setMode("swing");
+}
+
+function doImpact() {
+  if (state.impactDone) return;
+  state.impactDone = true;
+
+  const clubTip = yeti.getClubTip();
+  particles.impact(clubTip, state.power);
+  cameraRig.kick(0.45 + state.power * 0.75);
+  audio.play("hit", { power: state.power });
+  penguin.impact();
+
+  flight.launch(state.power, state.perfect);
+  state.distance = 0;
+  state.trailTimer = 0;
+  setMode(STATE.FLYING);
+  cameraRig.setMode("flight");
+  ui.updateLive(0, 0, "AIRBORNE");
+  ui.showLive(true);
+}
+
+function handleFlightEvent(event) {
+  if (event.type === "bounce") {
+    const position = new THREE.Vector3(event.x, 0.18, 0);
+    particles.puff(position, 10 + event.bounces * 4, 0.8);
+    particles.ring(position, 0xffffff, 0.35);
+    penguin.bounce();
+    audio.play("bounce");
+    cameraRig.kick(0.1 + event.bounces * 0.04);
+  } else if (event.type === "land") {
+    state.distance = event.distance;
+    penguin.root.position.x = event.x;
+    penguin.root.position.y = 0;
+    penguin.landed();
+    particles.puff(new THREE.Vector3(event.x, 0.1, 0), 28, 1.15);
+    particles.ring(new THREE.Vector3(event.x, 0.22, 0), 0xa8ecff, 0.7);
+    audio.play("land");
+    cameraRig.setMode("landed");
+    cameraRig.kick(0.24);
+    ui.updateLive(event.distance, 0, "LANDED");
+    ui.setHint("", false);
+    state.landT = 0;
+    setMode(STATE.LANDED);
+  }
+}
+
+function finishRound() {
+  if (state.mode === STATE.RESULT) return;
+  const distance = state.distance;
+  const isNewBest = distance > state.best + 0.05;
+  const rank = getRank(distance);
+
+  if (isNewBest) {
+    state.best = distance;
+    state.newBest = true;
+    saveBest(distance);
+    environment.setBest(distance);
+    environment.celebrate();
+    audio.play("best");
+    particles.celebrate(new THREE.Vector3(penguin.root.position.x, 0.4, 0));
+    ui.flash();
+  } else if (distance >= 60) {
+    audio.play("celebrate");
+  }
+
+  ui.setBest(state.best);
+  ui.showLive(false);
+  ui.showResult({
+    distance,
+    bestDistance: state.best,
+    isNewBest,
+    rank,
+    perfect: state.perfectHit,
+  });
+  ui.setHint("", false);
+  cameraRig.setMode("result");
+  setMode(STATE.RESULT);
+  state.resultT = 0;
+  state.sparkleTimer = 0;
+}
+
+function toggleSound() {
+  audio.unlock();
+  const muted = audio.toggleMuted();
+  ui.setSoundMuted(muted);
+  if (!muted) audio.play("ui");
+}
+
+async function shareResult() {
+  const distance = formatMeters(state.distance);
+  const text = `I smacked the pingu ${distance} in Smack the Pingu! 🐧💥 Can you beat it?`;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(
+        `${text} ${window.location.href.split("#")[0]}`,
+      );
+    } else {
+      const area = document.createElement("textarea");
+      area.value = `${text} ${window.location.href.split("#")[0]}`;
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      area.remove();
+    }
+    audio.play("copy");
+    ui.toast("Result copied — go brag.");
+  } catch {
+    ui.toast("Could not copy. Screenshot it instead.");
+  }
+}
+
+function handlePrimary() {
+  audio.unlock();
+  if (state.mode === STATE.TITLE) {
+    beginRound();
+  } else if (state.mode === STATE.READY) {
+    startCharging();
+  } else if (state.mode === STATE.RESULT) {
+    beginRound();
+  } else if (state.mode === STATE.LANDED && state.landT > 0.65) {
+    beginRound();
+  }
+}
+
+function handleRelease() {
+  if (state.mode === STATE.CHARGING) releaseCharge();
+}
+
+function updateCharging(dt) {
+  state.chargeT += dt;
+  const period = CHARGE_UP_TIME + CHARGE_DOWN_TIME;
+  state.power = triangleWave(state.chargeT, period);
+  state.perfect = state.power >= PERFECT_MIN;
+  ui.updateCharge(state.power, state.perfect);
+  audio.updateCharge(state.power);
+
+  penguin.update(dt, clockTime, "charge", { charge: state.power });
+  yeti.update(dt, clockTime, "windup", {
+    charge: state.power,
+    lookAngle: LOOK_RIGHT,
+  });
+}
+
+function updateSwing(dt) {
+  state.swingT = Math.min(1, state.swingT + dt / SWING_DURATION);
+  if (!state.impactDone && state.swingT >= SWING_IMPACT_T) {
+    doImpact();
+  }
+
+  const swingState = state.swingT < 1 ? "swing" : "follow";
+  yeti.update(dt, clockTime, swingState, {
+    swingT: state.swingT,
+    lookAngle: LOOK_RIGHT,
+  });
+}
+
+function updateGame(dt) {
+  state.modeTime += dt;
+
+  if (state.mode === STATE.TITLE) {
+    penguin.root.position.set(
+      PENGUIN_LEDGE.x,
+      PENGUIN_LEDGE.y,
+      PENGUIN_LEDGE.z,
+    );
+    penguin.update(dt, clockTime, "ledge", {});
+    yeti.update(dt, clockTime, "title", { lookAngle: 0.15 });
+    cameraRig.setMode("title");
+    return;
+  }
+
+  if (state.mode === STATE.DROP_READY) {
+    penguin.root.position.set(
+      PENGUIN_LEDGE.x,
+      PENGUIN_LEDGE.y,
+      PENGUIN_LEDGE.z,
+    );
+    penguin.update(dt, clockTime, "ledge", {});
+    yeti.update(dt, clockTime, "title", { lookAngle: 0.4 });
+    cameraRig.setMode("title");
+    if (state.modeTime > 0.38) {
+      state.dropVx = DROP_VX;
+      state.dropVy = DROP_VY;
+      audio.play("drop");
+      setMode(STATE.DROPPING);
+    }
+    return;
+  }
+
+  if (state.mode === STATE.DROPPING) {
+    state.dropVy -= DROP_GRAVITY * dt;
+    penguin.root.position.x += state.dropVx * dt;
+    penguin.root.position.y += state.dropVy * dt;
+    penguin.update(dt, clockTime, "fall", {});
+    yeti.update(dt, clockTime, "title", { lookAngle: 0.9 });
+
+    if (penguin.root.position.y <= 0) {
+      penguin.root.position.set(PENGUIN_LAND.x, 0, 0);
+      penguin.impact();
+      particles.puff(new THREE.Vector3(PENGUIN_LAND.x, 0.08, 0), 22, 1);
+      audio.play("land");
+      cameraRig.kick(0.18);
+      cameraRig.setMode("ready");
+      state.readyT = 0;
+      setMode(STATE.READY);
+      ui.showCharge(true);
+      ui.setHint("", false);
+    }
+    return;
+  }
+
+  if (state.mode === STATE.READY) {
+    state.readyT += dt;
+    penguin.update(dt, clockTime, state.readyT < 0.26 ? "land" : "idle", {});
+    yeti.update(dt, clockTime, "idle", { lookAngle: LOOK_RIGHT });
+    cameraRig.setMode("ready");
+    return;
+  }
+
+  if (state.mode === STATE.CHARGING) {
+    updateCharging(dt);
+    cameraRig.setMode("charge");
+    return;
+  }
+
+  if (state.mode === STATE.SWINGING) {
+    updateSwing(dt);
+    penguin.update(dt, clockTime, state.impactDone ? "fly" : "charge", {
+      charge: state.power,
+      spin: flight.state.spin,
+    });
+    cameraRig.setMode("swing");
+    return;
+  }
+
+  if (state.mode === STATE.FLYING) {
+    state.swingT = Math.min(1, state.swingT + dt / SWING_DURATION);
+    if (state.swingT < 1) {
+      yeti.update(dt, clockTime, "swing", {
+        swingT: state.swingT,
+        lookAngle: LOOK_RIGHT,
+      });
+    } else {
+      yeti.update(dt, clockTime, "follow", { lookAngle: LOOK_RIGHT });
+    }
+
+    flight.update(dt);
+    if (state.mode !== STATE.FLYING) return;
+
+    const body = flight.state;
+    penguin.root.position.set(body.x, body.y, 0);
+    penguin.update(dt, clockTime, "fly", { spin: body.spin });
+    cameraRig.setMode("flight");
+    ui.updateLive(body.distance, body.y, "AIRBORNE");
+
+    state.trailTimer += dt;
+    if (body.y > 0.7 && state.trailTimer > 0.055) {
+      state.trailTimer = 0;
+      particles.trail(new THREE.Vector3(body.x, body.y + 0.45, 0), {
+        x: body.vx,
+        y: body.vy,
+      });
+    }
+    return;
+  }
+
+  if (state.mode === STATE.LANDED) {
+    state.landT += dt;
+    penguin.update(dt, clockTime, "landed", {});
+    yeti.update(dt, clockTime, state.distance >= 60 ? "celebrate" : "slump", {
+      lookAngle: LOOK_RIGHT,
+    });
+    cameraRig.setMode("landed");
+    if (state.landT > 1.05) finishRound();
+    return;
+  }
+
+  if (state.mode === STATE.RESULT) {
+    state.resultT += dt;
+    state.sparkleTimer += dt;
+    const happy = state.newBest || state.distance >= 100;
+    penguin.update(dt, clockTime, happy ? "celebrate" : "landed", {});
+    yeti.update(dt, clockTime, state.distance >= 60 ? "celebrate" : "slump", {
+      lookAngle: LOOK_RIGHT,
+    });
+    cameraRig.setMode("result");
+
+    if (state.newBest && state.sparkleTimer > 0.85) {
+      state.sparkleTimer = 0;
+      particles.celebrate(
+        new THREE.Vector3(
+          penguin.root.position.x + (Math.random() - 0.5) * 3,
+          0.4,
+          0,
+        ),
+      );
+    }
+  }
+}
+
+const clock = new THREE.Clock();
+let clockTime = 0;
+let lastRendered = false;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  clockTime = clock.elapsedTime;
+
+  updateGame(dt);
+  const focusX =
+    state.mode === STATE.FLYING ||
+    state.mode === STATE.LANDED ||
+    state.mode === STATE.RESULT
+      ? penguin.root.position.x
+      : -1.8;
+  cameraRig.update(dt, clockTime, {
+    penguin: penguin.root.position,
+    charge: state.mode === STATE.CHARGING ? state.power : 0,
+  });
+  game.update(dt, clockTime, focusX);
+  environment.update(dt, clockTime, game.camera, penguin.root.position.x);
+  particles.update(dt);
+  game.renderer.render(game.scene, game.camera);
+
+  if (!lastRendered) {
+    lastRendered = true;
+    ui.ready();
+  }
+}
+
+ui = createUI({
+  onStart: handlePrimary,
+  onAgain: beginRound,
+  onShare: shareResult,
+  onSound: toggleSound,
 });
 
-// --- High Score ---
-bestDisplay.textContent = `Best: ${Math.round(bestDistance)}m`;
+initInput({
+  onPrimary: handlePrimary,
+  onRelease: handleRelease,
+  onSoundToggle: toggleSound,
+});
 
-function updateBestDistance(dist) {
-  if (dist > bestDistance) {
-    bestDistance = dist;
-    localStorage.setItem('penguinBest', bestDistance.toFixed(2));
-  }
-}
+penguin.root.position.set(PENGUIN_LEDGE.x, PENGUIN_LEDGE.y, PENGUIN_LEDGE.z);
+yeti.root.position.set(YETI_POS.x, YETI_POS.y, YETI_POS.z);
+environment.setBest(state.best);
+ui.setBest(state.best);
+ui.setSoundMuted(audio.isMuted());
+ui.showTitle();
+ui.setHint("Click or press space to drop the penguin");
+cameraRig.setMode("title");
 
-// --- Timing Bar UI ---
-function updateTimingBarUI() {
-  // Map timing value [-1, 1] to percentage [0%, 100%]
-  const pct = ((timing.value + 1) / 2) * 100;
-  timingIndicator.style.left = `calc(${pct}% - 2px)`;
-}
+window.__PINGU__ = {
+  getState: () => state.mode,
+  getPower: () => state.power,
+  getDistance: () =>
+    state.mode === STATE.FLYING ? flight.state.distance : state.distance,
+  getBest: () => state.best,
+  isPerfect: () => state.perfectHit,
+  start: () => handlePrimary(),
+  chargeStart: () => startCharging(),
+  chargeRelease: () => releaseCharge(),
+  reset: () => beginRound(),
+  getPosition: () => ({
+    x: penguin.root.position.x,
+    y: penguin.root.position.y,
+  }),
+};
 
-// --- Main Update ---
-function update(dt) {
-  switch (state) {
-    case STATES.INTRO:
-      break;
-
-    case STATES.DROPPING: {
-      dropTimer += dt;
-      if (dropTimer < DROP_PAUSE) {
-        // Dramatic pause on ledge
-        break;
-      }
-
-      // Hop forward and fall
-      const fallTime = dropTimer - DROP_PAUSE;
-      if (fallTime < 0.016) {
-        // Small hop — set once at the start
-        penguinVy = DROP_HOP_VY;
-      }
-
-      // Move toward land position horizontally
-      const hopTime = Math.max(0, fallTime - 0.016);
-      const hopDuration = 0.28;
-      const t = Math.min(1, hopTime / hopDuration);
-      penguin.position.x = PENGUIN_START.x + (LAND_X - PENGUIN_START.x) * t;
-
-      // Gravity (in 3D: positive vy goes up, gravity pulls down)
-      penguinVy -= GRAVITY * dt;
-      penguin.position.y += penguinVy * dt;
-
-      // Stretch during fall
-      squash = Math.min(1.3, 1 + Math.abs(penguinVy) * DROP_STRETCH_RATE);
-
-      // Ground collision
-      const terrainY = getTerrainY_3D(penguin.position.x);
-      if (penguin.position.y <= terrainY) {
-        penguin.position.y = terrainY;
-        state = STATES.LAND_WOBBLE;
-        wobbleTimer = 0;
-        squash = 1.35; // squish flat on landing
-        penguinVy = 0;
-      }
-      break;
-    }
-
-    case STATES.LAND_WOBBLE: {
-      wobbleTimer += dt;
-      squash += (1 - squash) * dt * SQUASH_RECOVERY_FAST;
-      if (wobbleTimer >= WOBBLE_DURATION) {
-        state = STATES.READY;
-        squash = 1;
-        // Show timing bar
-        timingBarContainer.classList.remove('hidden');
-      }
-      break;
-    }
-
-    case STATES.READY: {
-      // Oscillate timing value
-      timing.value = Math.sin(performance.now() * 0.001 * TIMING_OSCILLATION_SPEED);
-      updateTimingBarUI();
-
-      // Position timing bar above yeti in screen space
-      const yetiScreenPos = new THREE.Vector3(YETI_X, YETI_Y + 80, 0);
-      yetiScreenPos.project(camera);
-      const x = (yetiScreenPos.x + 1) / 2 * CANVAS_WIDTH;
-      const y = (-yetiScreenPos.y + 1) / 2 * CANVAS_HEIGHT;
-      timingBarContainer.style.left = `${x - 65}px`;
-      timingBarContainer.style.top = `${y}px`;
-
-      // Wind back yeti arm slightly, following timing
-      swingAngle = SWING_WINDBACK + (timing.value + 1) * (SWING_FORWARD - SWING_WINDBACK) * 0.15;
-      break;
-    }
-
-    case STATES.SWING: {
-      swingTimer += dt;
-      swingAngle += (SWING_FORWARD - swingAngle) * dt * SWING_SPEED_SWING;
-      if (swingTimer >= SWING_DURATION) {
-        launchPenguin();
-      }
-      break;
-    }
-
-    case STATES.FLYING: {
-      penguin.position.x += penguinVx * dt;
-      penguin.position.y += penguinVy * dt;
-      penguinVy -= GRAVITY * dt;
-
-      // Squash recovery
-      squash += (1 - squash) * dt * SQUASH_RECOVERY_FAST;
-
-      // Ground collision
-      const terrainY = getTerrainY_3D(penguin.position.x);
-      if (penguin.position.y <= terrainY && penguinVy < 0) {
-        penguin.position.y = terrainY;
-        bounceCount++;
-
-        // Bounce
-        penguinVy = Math.abs(penguinVy) * BOUNCE_DAMPING;
-        penguinVx *= HORIZONTAL_DAMPING;
-        squash = 1.3;
-        penguin.userData.justBounced = true;
-
-        if (bounceCount >= PENGUIN_SETTLE_BOUNCES || Math.abs(penguinVy) < PENGUIN_SETTLE_VY) {
-          // Landed
-          penguinVy = 0;
-          penguinVx = 0;
-          state = STATES.LANDED;
-
-          const distance = Math.max(0, penguin.position.x - LAND_X);
-          updateBestDistance(distance);
-
-          distanceDisplay.textContent = `${Math.round(distance)}m`;
-          bestDisplay.textContent = `Best: ${Math.round(bestDistance)}m`;
-
-          resultPanel.classList.remove('hidden');
-        }
-      }
-      break;
-    }
-
-    case STATES.LANDED:
-      squash += (1 - squash) * dt * SQUASH_RECOVERY_SLOW;
-      break;
-  }
-}
-
-// --- Main Loop ---
-let lastTime = performance.now();
-
-function animate(now) {
-  requestAnimationFrame(animate);
-
-  const dt = Math.min((now - lastTime) / 1000, 0.05);
-  lastTime = now;
-
-  update(dt);
-  updateCamera(camera, penguin, state, dt, cameraTarget);
-  updateAnimations(penguin, yeti, state, dt, squash, swingAngle, timing, wobbleTimer);
-  updateParticles(particles, penguin, state, dt);
-
-  renderer.render(scene, camera);
-}
-
-animate(performance.now());
+animate();

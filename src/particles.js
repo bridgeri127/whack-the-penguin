@@ -1,151 +1,416 @@
-import * as THREE from 'three';
-import { STATES, COLORS, SNOWFLAKE_COUNT, PARTICLE_GRAVITY, PARTICLE_LIFE_DECAY } from './constants.js';
+import * as THREE from "three";
+import { rand } from "./utils.js";
 
-// --- Ambient Snow ---
-function createSnowParticles(scene) {
-  const count = SNOWFLAKE_COUNT;
-  const positions = new Float32Array(count * 3);
-  const velocities = [];
+const PARTICLE_VERTEX = /* glsl */ `
+  attribute float aSize;
+  attribute vec3 aColor;
+  attribute float aAlpha;
+  varying vec3 vColor;
+  varying float vAlpha;
 
-  for (let i = 0; i < count; i++) {
-    positions[i * 3] = Math.random() * 800 - 200;
-    positions[i * 3 + 1] = Math.random() * 400 + 50;
-    positions[i * 3 + 2] = Math.random() * 200 - 100;
-    velocities.push({
-      x: (Math.random() - 0.5) * 15,
-      y: -(20 + Math.random() * 25),
-      z: (Math.random() - 0.5) * 8,
-      sway: Math.random() * Math.PI * 2,
-      swaySpeed: 1 + Math.random() * 2,
-    });
+  void main() {
+    vColor = aColor;
+    vAlpha = aAlpha;
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    gl_PointSize = aSize * (320.0 / max(1.0, -mvPosition.z));
+    gl_Position = projectionMatrix * mvPosition;
   }
+`;
 
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+const PARTICLE_FRAGMENT = /* glsl */ `
+  varying vec3 vColor;
+  varying float vAlpha;
 
-  const mat = new THREE.PointsMaterial({
-    color: COLORS.white,
-    size: 2.5,
-    transparent: true,
-    opacity: 0.7,
-    sizeAttenuation: true,
-  });
+  void main() {
+    vec2 uv = gl_PointCoord - 0.5;
+    float distanceToCenter = length(uv);
+    float alpha = smoothstep(0.5, 0.04, distanceToCenter) * vAlpha;
+    if (alpha < 0.01) discard;
+    gl_FragColor = vec4(vColor, alpha);
+  }
+`;
 
-  const points = new THREE.Points(geo, mat);
-  scene.add(points);
+class ParticlePool {
+  constructor(scene, capacity, blending) {
+    this.capacity = capacity;
+    this.cursor = 0;
+    this.particles = [];
 
-  return { points, velocities, geo };
-}
+    this.positions = new Float32Array(capacity * 3);
+    this.colors = new Float32Array(capacity * 3);
+    this.sizes = new Float32Array(capacity);
+    this.alphas = new Float32Array(capacity);
 
-// --- Burst Particles ---
-function createBurst(scene, origin, count, colors, spread, speed) {
-  const particles = [];
-
-  for (let i = 0; i < count; i++) {
-    const color = colors[Math.floor(Math.random() * colors.length)];
-    const mat = new THREE.MeshStandardMaterial({
-      color,
-      flatShading: true,
-      transparent: true,
-      opacity: 1,
-    });
-    const size = 1 + Math.random() * 2;
-    const geo = new THREE.BoxGeometry(size, size, size);
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.copy(origin);
-
-    const angle = Math.random() * Math.PI * 2;
-    const yAngle = (Math.random() - 0.5) * Math.PI;
-    const spd = speed * (0.5 + Math.random() * 0.5);
-
-    mesh.userData.velocity = new THREE.Vector3(
-      Math.cos(angle) * Math.cos(yAngle) * spread * spd,
-      Math.abs(Math.sin(yAngle)) * spread * spd + speed * 0.5,
-      Math.sin(angle) * Math.cos(yAngle) * spread * spd * 0.3
+    this.geometry = new THREE.BufferGeometry();
+    this.geometry.setAttribute(
+      "position",
+      new THREE.BufferAttribute(this.positions, 3),
     );
-    mesh.userData.life = 1.0;
+    this.geometry.setAttribute(
+      "aColor",
+      new THREE.BufferAttribute(this.colors, 3),
+    );
+    this.geometry.setAttribute(
+      "aSize",
+      new THREE.BufferAttribute(this.sizes, 1),
+    );
+    this.geometry.setAttribute(
+      "aAlpha",
+      new THREE.BufferAttribute(this.alphas, 1),
+    );
+    this.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 5000);
 
-    scene.add(mesh);
-    particles.push(mesh);
-  }
+    this.material = new THREE.ShaderMaterial({
+      vertexShader: PARTICLE_VERTEX,
+      fragmentShader: PARTICLE_FRAGMENT,
+      transparent: true,
+      depthWrite: false,
+      blending,
+    });
 
-  return particles;
-}
+    this.points = new THREE.Points(this.geometry, this.material);
+    this.points.frustumCulled = false;
+    scene.add(this.points);
 
-export function initParticles(scene) {
-  const snow = createSnowParticles(scene);
-  const bursts = [];
-
-  return { snow, bursts, scene };
-}
-
-export function updateParticles(particles, penguin, state, dt) {
-  const { snow, bursts, scene } = particles;
-
-  // Update ambient snow
-  const sPos = snow.geo.attributes.position;
-  for (let i = 0; i < snow.velocities.length; i++) {
-    const v = snow.velocities[i];
-    sPos.setX(i, sPos.getX(i) + v.x * dt + Math.sin(v.sway + performance.now() * 0.001 * v.swaySpeed) * 8 * dt);
-    sPos.setY(i, sPos.getY(i) + v.y * dt);
-    sPos.setZ(i, sPos.getZ(i) + v.z * dt);
-
-    // Wrap around
-    if (sPos.getY(i) < -10) {
-      sPos.setY(i, 400 + Math.random() * 50);
-      sPos.setX(i, sPos.getX(i) + (Math.random() - 0.5) * 100);
+    for (let i = 0; i < capacity; i += 1) {
+      this.particles.push({
+        life: 0,
+        maxLife: 1,
+        vx: 0,
+        vy: 0,
+        vz: 0,
+        gravity: 0,
+        drag: 0,
+        size: 0,
+        sizeGrowth: 0,
+        color: new THREE.Color(),
+        x: 0,
+        y: 0,
+        z: 0,
+      });
     }
   }
-  sPos.needsUpdate = true;
 
-  // Update burst particles
-  for (let b = bursts.length - 1; b >= 0; b--) {
-    const group = bursts[b];
-    let allDead = true;
+  spawn(options) {
+    const {
+      x,
+      y,
+      z,
+      count = 10,
+      colors = [0xffffff],
+      speedMin = 1,
+      speedMax = 4,
+      upward = 0.5,
+      spread = 1,
+      gravity = -4,
+      drag = 1.4,
+      lifeMin = 0.5,
+      lifeMax = 1.1,
+      sizeMin = 0.35,
+      sizeMax = 0.85,
+      sizeGrowth = 0,
+    } = options;
 
-    for (let i = 0; i < group.length; i++) {
-      const p = group[i];
-      if (p.userData.life <= 0) continue;
+    for (let i = 0; i < count; i += 1) {
+      const index = this.cursor;
+      this.cursor = (this.cursor + 1) % this.capacity;
+      const particle = this.particles[index];
 
-      allDead = false;
-      p.userData.life -= dt * PARTICLE_LIFE_DECAY;
-      p.material.opacity = Math.max(0, p.userData.life);
+      const theta = rand(0, Math.PI * 2);
+      const phi = Math.acos(rand(-1, 1));
+      const directionX = Math.sin(phi) * Math.cos(theta);
+      const directionZ = Math.sin(phi) * Math.sin(theta);
+      const directionY = Math.cos(phi);
 
-      p.userData.velocity.y -= PARTICLE_GRAVITY * dt;
-      p.position.add(p.userData.velocity.clone().multiplyScalar(dt));
-      p.rotation.x += dt * 3;
-      p.rotation.z += dt * 2;
+      const speed = rand(speedMin, speedMax);
+      particle.life = rand(lifeMin, lifeMax);
+      particle.maxLife = particle.life;
+      particle.x = x + rand(-0.1, 0.1);
+      particle.y = y + rand(-0.05, 0.15);
+      particle.z = z + rand(-0.1, 0.1);
+      particle.vx = directionX * speed * spread;
+      particle.vy = directionY * speed + upward;
+      particle.vz = directionZ * speed * spread * 0.55;
+      particle.gravity = gravity;
+      particle.drag = drag;
+      particle.size = rand(sizeMin, sizeMax);
+      particle.sizeGrowth = sizeGrowth;
+      particle.color.set(colors[Math.floor(Math.random() * colors.length)]);
     }
+  }
 
-    if (allDead) {
-      // Clean up
-      for (const p of group) {
-        scene.remove(p);
-        p.geometry.dispose();
-        p.material.dispose();
+  update(dt) {
+    for (let i = 0; i < this.capacity; i += 1) {
+      const particle = this.particles[i];
+      const index = i * 3;
+
+      if (particle.life <= 0) {
+        this.alphas[i] = 0;
+        continue;
       }
-      bursts.splice(b, 1);
+
+      particle.life -= dt;
+      if (particle.life <= 0) {
+        this.alphas[i] = 0;
+        continue;
+      }
+
+      const damping = Math.exp(-particle.drag * dt);
+      particle.vx *= damping;
+      particle.vz *= damping;
+      particle.vy = particle.vy * damping + particle.gravity * dt;
+      particle.x += particle.vx * dt;
+      particle.y += particle.vy * dt;
+      particle.z += particle.vz * dt;
+      particle.size += particle.sizeGrowth * dt;
+
+      const t = particle.life / particle.maxLife;
+      this.positions[index] = particle.x;
+      this.positions[index + 1] = particle.y;
+      this.positions[index + 2] = particle.z;
+      this.colors[index] = particle.color.r;
+      this.colors[index + 1] = particle.color.g;
+      this.colors[index + 2] = particle.color.b;
+      this.sizes[i] = particle.size;
+      this.alphas[i] = Math.pow(t, 0.7);
     }
+
+    this.geometry.attributes.position.needsUpdate = true;
+    this.geometry.attributes.aColor.needsUpdate = true;
+    this.geometry.attributes.aSize.needsUpdate = true;
+    this.geometry.attributes.aAlpha.needsUpdate = true;
+  }
+}
+
+function createFlashTexture() {
+  const size = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  const gradient = ctx.createRadialGradient(
+    size / 2,
+    size / 2,
+    0,
+    size / 2,
+    size / 2,
+    size / 2,
+  );
+  gradient.addColorStop(0, "rgba(255, 255, 255, 1)");
+  gradient.addColorStop(0.22, "rgba(255, 246, 200, 0.9)");
+  gradient.addColorStop(0.55, "rgba(255, 210, 100, 0.24)");
+  gradient.addColorStop(1, "rgba(255, 210, 100, 0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+export function createParticles(scene) {
+  const snowPool = new ParticlePool(scene, 320, THREE.NormalBlending);
+  const sparkPool = new ParticlePool(scene, 260, THREE.AdditiveBlending);
+
+  const flashTexture = createFlashTexture();
+  const flashes = [];
+  for (let i = 0; i < 4; i += 1) {
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: flashTexture,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
+    );
+    sprite.visible = false;
+    scene.add(sprite);
+    flashes.push({ sprite, life: 0, maxLife: 0.3 });
   }
 
-  // Spawn hit burst when swinging
-  if (state === STATES.SWING) {
-    // Already handled in game.js via state transition
+  const rings = [];
+  const ringGeometry = new THREE.RingGeometry(0.55, 0.68, 48);
+  for (let i = 0; i < 5; i += 1) {
+    const mesh = new THREE.Mesh(
+      ringGeometry,
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
+    );
+    mesh.visible = false;
+    scene.add(mesh);
+    rings.push({ mesh, life: 0, maxLife: 0.5, strength: 1 });
   }
 
-  // Spawn snow burst on landing bounce
-  if (state === STATES.FLYING && penguin.userData && penguin.userData.justBounced) {
-    const origin = new THREE.Vector3(penguin.position.x, penguin.position.y + 5, 0);
-    const colors = [COLORS.snow, COLORS.snowDark, COLORS.paleBlue, 0xffffff];
-    bursts.push(createBurst(scene, origin, 12, colors, 1, 120));
-    penguin.userData.justBounced = false;
-  }
+  let flashCursor = 0;
+  let ringCursor = 0;
 
-  // Spawn hit burst on launch
-  if (state === STATES.FLYING && penguin.userData && penguin.userData.justLaunched) {
-    const origin = new THREE.Vector3(penguin.position.x, penguin.position.y + 10, 0);
-    const colors = [COLORS.gold, COLORS.orange, COLORS.red, COLORS.white];
-    bursts.push(createBurst(scene, origin, 15, colors, 1.5, 180));
-    penguin.userData.justLaunched = false;
-  }
+  const flash = (position, color = 0xffe2a1) => {
+    const entry = flashes[flashCursor];
+    flashCursor = (flashCursor + 1) % flashes.length;
+    entry.sprite.position.copy(position);
+    entry.sprite.material.color.set(color);
+    entry.sprite.scale.setScalar(4);
+    entry.sprite.material.opacity = 0.9;
+    entry.sprite.visible = true;
+    entry.life = entry.maxLife;
+  };
+
+  const ring = (position, color = 0xa8ecff, strength = 1) => {
+    const entry = rings[ringCursor];
+    ringCursor = (ringCursor + 1) % rings.length;
+    entry.mesh.position.copy(position);
+    entry.mesh.position.z += 0.7;
+    entry.mesh.material.color.set(color);
+    entry.mesh.material.opacity = 0.7;
+    entry.mesh.scale.setScalar(0.5);
+    entry.mesh.visible = true;
+    entry.life = entry.maxLife;
+    entry.strength = strength;
+  };
+
+  const puff = (position, count = 14, scale = 1) => {
+    snowPool.spawn({
+      x: position.x,
+      y: position.y + 0.1,
+      z: position.z,
+      count,
+      colors: [0xffffff, 0xe6f7ff, 0xc8ecff],
+      speedMin: 1.5 * scale,
+      speedMax: 5.5 * scale,
+      upward: 1.4 * scale,
+      spread: 1,
+      gravity: -5,
+      drag: 2.2,
+      lifeMin: 0.45,
+      lifeMax: 1.0,
+      sizeMin: 0.35,
+      sizeMax: 0.9,
+      sizeGrowth: 0.25,
+    });
+  };
+
+  const impact = (position, power = 0.5) => {
+    const strength = 0.5 + power * 0.8;
+    sparkPool.spawn({
+      x: position.x,
+      y: position.y,
+      z: position.z,
+      count: 34,
+      colors: [0xfff5d6, 0xffd166, 0x8fe8ff, 0xffffff],
+      speedMin: 4,
+      speedMax: 15 * strength,
+      upward: 2.2,
+      spread: 1.25,
+      gravity: -10,
+      drag: 0.9,
+      lifeMin: 0.35,
+      lifeMax: 0.9,
+      sizeMin: 0.25,
+      sizeMax: 0.72,
+    });
+    snowPool.spawn({
+      x: position.x,
+      y: position.y,
+      z: position.z,
+      count: 22,
+      colors: [0xffffff, 0xdff6ff],
+      speedMin: 2,
+      speedMax: 9,
+      upward: 2,
+      spread: 1.2,
+      gravity: -6,
+      drag: 1.7,
+      lifeMin: 0.5,
+      lifeMax: 1.2,
+      sizeMin: 0.45,
+      sizeMax: 1.1,
+      sizeGrowth: 0.3,
+    });
+    flash(position, 0xffe2a1);
+    ring(position, 0xffe2a1, strength);
+    ring(position, 0x8fe8ff, strength * 0.7);
+  };
+
+  const trail = (position, velocity) => {
+    snowPool.spawn({
+      x: position.x,
+      y: position.y,
+      z: position.z,
+      count: 2,
+      colors: [0xffffff, 0xc8f4ff],
+      speedMin: 0.2,
+      speedMax: 1.4,
+      upward: 0.2,
+      spread: 1,
+      gravity: -1,
+      drag: 2,
+      lifeMin: 0.3,
+      lifeMax: 0.6,
+      sizeMin: 0.25,
+      sizeMax: 0.5,
+      sizeGrowth: 0.1,
+    });
+  };
+
+  const celebrate = (position) => {
+    sparkPool.spawn({
+      x: position.x,
+      y: position.y + 1,
+      z: position.z,
+      count: 48,
+      colors: [0xffd166, 0x8fe8ff, 0xffffff, 0x7dffc4, 0xff8fab],
+      speedMin: 3,
+      speedMax: 11,
+      upward: 5,
+      spread: 1,
+      gravity: -5,
+      drag: 1.1,
+      lifeMin: 0.9,
+      lifeMax: 2.1,
+      sizeMin: 0.3,
+      sizeMax: 0.8,
+    });
+    ring(position, 0xffd166, 0.9);
+    flash(position, 0xfff1bd);
+  };
+
+  const update = (dt) => {
+    snowPool.update(dt);
+    sparkPool.update(dt);
+
+    for (const entry of flashes) {
+      if (entry.life <= 0) continue;
+      entry.life -= dt;
+      const t = Math.max(0, entry.life / entry.maxLife);
+      entry.sprite.material.opacity = t * t * 0.9;
+      entry.sprite.scale.setScalar(3 + (1 - t) * 5);
+      if (entry.life <= 0) entry.sprite.visible = false;
+    }
+
+    for (const entry of rings) {
+      if (entry.life <= 0) continue;
+      entry.life -= dt;
+      const t = 1 - Math.max(0, entry.life / entry.maxLife);
+      entry.mesh.scale.setScalar(0.5 + t * (2.5 + entry.strength * 2.5));
+      entry.mesh.material.opacity = (1 - t) * 0.4;
+      entry.mesh.rotation.z += dt * 0.4;
+      if (entry.life <= 0) entry.mesh.visible = false;
+    }
+  };
+
+  return {
+    puff,
+    impact,
+    trail,
+    celebrate,
+    ring,
+    flash,
+    update,
+  };
 }

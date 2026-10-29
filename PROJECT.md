@@ -1,62 +1,78 @@
-# Whack the Penguin — 3D Remake
+# Smack the Pingu — Design & Tech Notes
 
-A modern 3D remake of the classic Flash game. A penguin jumps from a snowy ledge and the player controls a yeti who must time a club swing to whack the penguin as far as possible. Built with Three.js and a stylized low-poly aesthetic.
+A stylized 3D recreation of the classic distance-launch game. The player drops a penguin from a cliff, charges a yeti's club swing, and times the release to launch the penguin as far as possible.
 
-## Game Flow
+## Goals
 
-1. **Intro** — Penguin stands on a cliff ledge above the yeti. Prompt to start.
-2. **Drop** — Penguin jumps from the ledge, falls to the ground in front of the yeti (squash-and-stretch animation).
-3. **Land wobble** — Penguin bounces and wobbles to recover from the landing.
-4. **Ready** — Timing bar oscillates above the yeti. Player presses to swing.
-5. **Swing** — Yeti swings club forward. Club makes contact with the penguin.
-6. **Launch** — Penguin flies through the air with projectile physics, spinning.
-7. **Bounce** — Penguin bounces up to 4 times with energy loss per bounce.
-8. **Landed** — Distance displayed. High score tracked in localStorage.
+- Keep the original one-more-try loop: drop → charge → release → watch it fly → beat the best.
+- Make the timing readable and satisfying with a hold-to-charge meter that oscillates through a gold perfect zone.
+- Replace the old flat presentation with a low-poly arctic diorama, cinematic follow camera, particles, and procedural audio.
+- Run as static files with no build step and no runtime CDN dependency for Three.js.
 
-## Tech
+## Game flow
 
-- **Engine**: Three.js via CDN (ES module import)
-- **Stack**: WebGL + Vanilla JS + CSS, no build tools
-- **Art**: Procedural low-poly geometry (BoxGeometry, ConeGeometry, SphereGeometry), flat-shaded
-- **Models**: All built in code from Three.js primitives — zero external assets
-- **Physics**: Custom projectile motion (gravity, air friction, bounce damping)
-- **States**: 7-state game machine (INTRO → DROPPING → LAND_WOBBLE → READY → SWING → FLYING → LANDED)
-- **Rendering**: Perspective camera, three-point lighting, fog, procedural terrain
-
-## File Structure
-
-```
-penguin/
-├── index.html          -- Three.js import, renderer div, UI overlays
-├── style.css           -- Full-screen layout, overlay styling
-├── game.js             -- Entry point, game loop orchestrator
-└── src/
-    ├── constants.js    -- Shared constants (gravity, positions, colors)
-    ├── scene.js        -- Renderer, camera, lights, fog, sky
-    ├── environment.js  -- Terrain, cliff, mountains, distance markers
-    ├── penguin.js      -- Penguin character model (Group hierarchy)
-    ├── yeti.js         -- Yeti character model (Group hierarchy + club arm)
-    ├── physics.js      -- State machine, projectile motion, bounce logic
-    ├── camera.js       -- Camera positioning per state, lerp follow
-    ├── particles.js    -- Ambient snow, hit burst, bounce dust
-    └── animations.js   -- Squash/stretch, swing, wobble, eye tracking
-```
-
-## Controls
-
-- **Space / Click / Tap**: Advance game state (start → swing → retry)
-- **Again button**: Reset and play again
+| State        | What happens                                                          |
+| ------------ | --------------------------------------------------------------------- |
+| `title`      | Penguin waits on the ledge; title card is shown.                      |
+| `drop_ready` | Short beat before the penguin hops off.                               |
+| `dropping`   | Projectile drop from the ledge to the landing spot.                   |
+| `ready`      | Penguin lands; charge meter appears.                                  |
+| `charging`   | Meter rises to 100% then falls; yeti winds up; release to lock power. |
+| `swinging`   | Club sweeps through the impact frame.                                 |
+| `flying`     | Penguin launches, spins, bounces, and the camera follows.             |
+| `landed`     | Short settle; result card is prepared.                                |
+| `result`     | Distance, rank, best, share, and replay.                              |
 
 ## Mechanics
 
-- Timing bar oscillates sinuously from -1 to 1
-- Center (green) = max power, ~35° launch angle
-- Edges (red) = weak hits, suboptimal angles
-- Power curve: cosine falloff from center
-- Launch speed: `power * 1400 + 200` px/s
-- Bounce damping: 35% energy retained
-- Horizontal friction on bounce: 60% retained
+- **Power** is sampled from a triangle wave: 0 → 1 over `CHARGE_UP_TIME`, then back down over `CHARGE_DOWN_TIME`.
+- **Perfect zone** starts at `PERFECT_MIN` (85% of the meter). A perfect hit gets a small speed bonus and a badge.
+- **Launch velocity** is derived from power:
+  - speed: `18 → 64` units/s
+  - angle: `40° → 48°`
+  - gravity: `20` units/s²
+- **Flight** integrates gravity, applies up to two energy-losing bounces, and tracks distance from the landing spot.
+- **Best distance** is persisted as `pinguSmashBest`; sound preference as `pinguSmashMuted`.
 
-## Repo
+## Visual system
 
-https://github.com/bridgeri127/whack-the-penguin
+- Stylized low-poly arctic scene: ice cliff, snow field, pine trees, layered mountains, aurora, stars, moon, and snowfall.
+- Procedural characters: penguin with squash/stretch, blink, scarf, and flipper animation; yeti with fur tufts, expressions, club wind-up, swing, follow-through, and celebration.
+- Camera modes for title, ready, charge, swing, flight, landing, and result, with portrait-specific framing.
+- Particles: snow puffs, impact sparks, shockwave rings, launch trails, and celebration confetti.
+- UI: glass cards, gradient display type, live distance HUD, charge meter with perfect zone, sound toggle, share/copy result.
+
+## Audio
+
+All sounds are synthesized with the Web Audio API: UI ticks, drop whoosh, landing thuds, swing whoosh, impact crack, bounce, celebration arpeggio, best-score chime, and a rising charge tone. Audio unlocks on the first gesture and respects the mute toggle.
+
+## File map
+
+```
+index.html          page shell and UI
+style.css           responsive glass UI and animations
+game.js             state machine, loop, input, scoring
+src/constants.js    tuning constants, ranks, storage keys
+src/utils.js        math, easing, formatting helpers
+src/scene.js        renderer, lights, sky, stars, moon
+src/environment.js  terrain, cliff, trees, mountains, aurora, snowfall, markers, spectators
+src/penguin.js      penguin model + animation
+src/yeti.js         yeti/club model + swing animation
+src/physics.js      launch velocity and flight integration
+src/camera.js       mode-based camera rig with portrait framing
+src/particles.js    pooled GPU particles, rings, flashes
+src/audio.js        procedural Web Audio effects
+src/ui.js           DOM UI state and animations
+src/input.js        pointer/keyboard handling
+vendor/             local Three.js r170 module
+```
+
+## Tuning notes
+
+Most feel changes live in `src/constants.js`:
+
+- `CHARGE_UP_TIME`, `CHARGE_DOWN_TIME` — charge meter cadence
+- `PERFECT_MIN` — perfect timing window
+- `LAUNCH.minSpeed`, `LAUNCH.maxSpeed`, `LAUNCH.minAngle`, `LAUNCH.maxAngle` — distance range
+- `BOUNCE_DAMPING`, `BOUNCE_FRICTION`, `SETTLE_BOUNCES` — bounce feel
+- `RANKS` — result titles and thresholds

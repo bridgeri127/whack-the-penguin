@@ -1,223 +1,495 @@
-import * as THREE from 'three';
-import { COLORS } from './constants.js';
+import * as THREE from "three";
+import { clamp, damp, easeInCubic, easeOutCubic, lerp, rand } from "./utils.js";
 
-export function createYeti(scene, x, y) {
-  const group = new THREE.Group();
+function makeMaterials() {
+  return {
+    fur: new THREE.MeshStandardMaterial({
+      color: 0xe9f5ff,
+      roughness: 0.92,
+      metalness: 0.0,
+    }),
+    furShade: new THREE.MeshStandardMaterial({
+      color: 0xc9e2f2,
+      roughness: 0.95,
+    }),
+    belly: new THREE.MeshStandardMaterial({ color: 0xf7fcff, roughness: 0.9 }),
+    face: new THREE.MeshStandardMaterial({ color: 0x94d6e8, roughness: 0.72 }),
+    faceDark: new THREE.MeshStandardMaterial({
+      color: 0x315a6b,
+      roughness: 0.6,
+    }),
+    eye: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.25 }),
+    pupil: new THREE.MeshStandardMaterial({ color: 0x070c12, roughness: 0.2 }),
+    horn: new THREE.MeshStandardMaterial({ color: 0xd8c6a4, roughness: 0.7 }),
+    wood: new THREE.MeshStandardMaterial({ color: 0x8a5a3b, roughness: 0.78 }),
+    woodDark: new THREE.MeshStandardMaterial({
+      color: 0x5e3a24,
+      roughness: 0.85,
+    }),
+    ice: new THREE.MeshStandardMaterial({
+      color: 0xaee8ff,
+      roughness: 0.2,
+      metalness: 0.1,
+    }),
+  };
+}
 
-  const bodyMat = new THREE.MeshStandardMaterial({
-    color: COLORS.yetiBody,
-    flatShading: true,
-  });
-  const headMat = new THREE.MeshStandardMaterial({
-    color: COLORS.yetiHead,
-    flatShading: true,
-  });
-  const hairMat = new THREE.MeshStandardMaterial({
-    color: COLORS.yetiHair,
-    flatShading: true,
-  });
-  const eyeWhiteMat = new THREE.MeshStandardMaterial({
-    color: COLORS.yetiEye,
-    flatShading: true,
-  });
-  const pupilMat = new THREE.MeshStandardMaterial({
-    color: COLORS.yetiPupil,
-    flatShading: true,
-  });
-  const browMat = new THREE.MeshStandardMaterial({
-    color: COLORS.yetiBrow,
-    flatShading: true,
-  });
-  const mouthMat = new THREE.MeshStandardMaterial({
-    color: COLORS.yetiMouth,
-    flatShading: true,
-  });
-  const tongueMat = new THREE.MeshStandardMaterial({
-    color: COLORS.yetiTongue,
-    flatShading: true,
-  });
-  const footMat = new THREE.MeshStandardMaterial({
-    color: COLORS.yetiFoot,
-    flatShading: true,
-  });
-  const handleMat = new THREE.MeshStandardMaterial({
-    color: COLORS.clubHandle,
-    flatShading: true,
-  });
-  const clubHeadMat = new THREE.MeshStandardMaterial({
-    color: COLORS.clubHead,
-    flatShading: true,
-  });
-  const clubDetailMat = new THREE.MeshStandardMaterial({
-    color: COLORS.clubDetail,
-    flatShading: true,
-  });
+function addMesh(parent, geometry, material, position, scale, rotation) {
+  const mesh = new THREE.Mesh(geometry, material);
+  if (position) mesh.position.set(...position);
+  if (scale) mesh.scale.set(...scale);
+  if (rotation) mesh.rotation.set(...rotation);
+  mesh.castShadow = true;
+  parent.add(mesh);
+  return mesh;
+}
 
-  // Body — large torso
-  const bodyGroup = new THREE.Group();
-  bodyGroup.name = 'body';
+export function createYeti() {
+  const root = new THREE.Group();
+  const rig = new THREE.Group();
+  root.add(rig);
 
-  const torsoGeo = new THREE.BoxGeometry(36, 48, 30);
-  const torso = new THREE.Mesh(torsoGeo, bodyMat);
-  torso.castShadow = true;
-  bodyGroup.add(torso);
+  const materials = makeMaterials();
 
-  // Fur details — small boxes scattered on torso
-  const furPositions = [
-    [-10, 15, 15.1], [10, 10, 15.1], [-5, -5, 15.1],
-    [8, -12, 15.1], [-12, 5, 15.1], [5, 20, 15.1],
-    [-8, -18, 15.1], [12, -3, 15.1],
-  ];
-  for (const [fx, fy, fz] of furPositions) {
-    const fGeo = new THREE.BoxGeometry(6 + Math.random() * 4, 3, 1);
-    const fur = new THREE.Mesh(fGeo, hairMat);
-    fur.position.set(fx, fy, fz);
-    bodyGroup.add(fur);
-  }
+  const body = addMesh(
+    rig,
+    new THREE.SphereGeometry(1.05, 22, 18),
+    materials.fur,
+    [0, 1.95, 0],
+    [0.96, 1.2, 0.82],
+  );
+  body.receiveShadow = true;
 
-  group.add(bodyGroup);
+  const belly = addMesh(
+    rig,
+    new THREE.SphereGeometry(0.78, 18, 14),
+    materials.belly,
+    [0, 1.92, 0.46],
+    [0.8, 1.0, 0.46],
+  );
+  belly.castShadow = false;
 
-  // Legs
-  const legGeo = new THREE.BoxGeometry(12, 20, 12);
-
-  const legL = new THREE.Mesh(legGeo, bodyMat);
-  legL.position.set(-6, -34, 5);
-  legL.castShadow = true;
-  bodyGroup.add(legL);
-
-  const legR = new THREE.Mesh(legGeo, bodyMat);
-  legR.position.set(-6, -34, -5);
-  legR.castShadow = true;
-  bodyGroup.add(legR);
-
-  // Feet
-  const footGeo = new THREE.BoxGeometry(14, 6, 16);
-
-  const footL = new THREE.Mesh(footGeo, footMat);
-  footL.position.set(-2, -44, 6);
-  bodyGroup.add(footL);
-
-  const footR = new THREE.Mesh(footGeo, footMat);
-  footR.position.set(-2, -44, -6);
-  bodyGroup.add(footR);
-
-  // Head group
   const headGroup = new THREE.Group();
-  headGroup.name = 'head';
+  headGroup.position.set(0, 3.25, 0.05);
+  rig.add(headGroup);
 
-  // Head box
-  const headGeo = new THREE.BoxGeometry(30, 26, 26);
-  const head = new THREE.Mesh(headGeo, headMat);
-  head.castShadow = true;
-  headGroup.add(head);
+  const head = addMesh(
+    headGroup,
+    new THREE.SphereGeometry(0.82, 22, 18),
+    materials.fur,
+    [0, 0, 0],
+    [1, 0.95, 0.9],
+  );
+  head.receiveShadow = true;
 
-  // Hair tufts on top
-  const hairTuftPositions = [
-    [-5, 14, 0], [5, 15, 4], [0, 15, -4], [8, 13, -2], [-8, 13, 2],
-  ];
-  for (const [hx, hy, hz] of hairTuftPositions) {
-    const hGeo = new THREE.BoxGeometry(5, 6 + Math.random() * 4, 3);
-    const tuft = new THREE.Mesh(hGeo, hairMat);
-    tuft.position.set(hx, hy, hz);
-    headGroup.add(tuft);
+  const muzzle = addMesh(
+    headGroup,
+    new THREE.SphereGeometry(0.55, 18, 14),
+    materials.face,
+    [0, -0.12, 0.52],
+    [1.0, 0.7, 0.46],
+  );
+  muzzle.castShadow = false;
+
+  const mouth = addMesh(
+    headGroup,
+    new THREE.SphereGeometry(0.28, 14, 10),
+    materials.faceDark,
+    [0, -0.2, 0.78],
+    [0.92, 0.34, 0.18],
+  );
+  mouth.castShadow = false;
+
+  for (const side of [-1, 1]) {
+    addMesh(headGroup, new THREE.BoxGeometry(0.11, 0.13, 0.06), materials.eye, [
+      side * 0.12,
+      -0.17,
+      0.82,
+    ]);
+    addMesh(
+      headGroup,
+      new THREE.SphereGeometry(0.035, 8, 6),
+      materials.faceDark,
+      [side * 0.1, 0.02, 0.79],
+    );
   }
 
-  // Eyes
-  const eyeGeo = new THREE.SphereGeometry(5, 5, 4);
-  const pupilGeo = new THREE.SphereGeometry(2.8, 4, 3);
+  const eyeGroups = [];
+  for (const side of [-1, 1]) {
+    const eyeGroup = new THREE.Group();
+    eyeGroup.position.set(side * 0.27, 0.12, 0.66);
+    headGroup.add(eyeGroup);
 
-  const eyeL = new THREE.Mesh(eyeGeo, eyeWhiteMat);
-  eyeL.position.set(8, 4, 8);
-  headGroup.add(eyeL);
+    addMesh(
+      eyeGroup,
+      new THREE.SphereGeometry(0.135, 14, 12),
+      materials.eye,
+      [0, 0, 0],
+      [1, 1, 0.55],
+    );
+    addMesh(
+      eyeGroup,
+      new THREE.SphereGeometry(0.07, 12, 10),
+      materials.pupil,
+      [0, 0, 0.07],
+      [1, 1, 0.6],
+    );
+    addMesh(eyeGroup, new THREE.SphereGeometry(0.022, 8, 6), materials.eye, [
+      side * -0.018,
+      0.03,
+      0.13,
+    ]);
+    eyeGroups.push(eyeGroup);
+  }
 
-  const pupilL = new THREE.Mesh(pupilGeo, pupilMat);
-  pupilL.name = 'pupilL';
-  pupilL.position.set(11, 5, 8);
-  headGroup.add(pupilL);
+  const brows = [];
+  for (const side of [-1, 1]) {
+    const brow = addMesh(
+      headGroup,
+      new THREE.SphereGeometry(0.14, 10, 8),
+      materials.furShade,
+      [side * 0.27, 0.32, 0.68],
+      [1.4, 0.28, 0.3],
+      [0, 0, side * -0.16],
+    );
+    brows.push(brow);
+  }
 
-  const eyeR = new THREE.Mesh(eyeGeo, eyeWhiteMat);
-  eyeR.position.set(8, 4, -8);
-  headGroup.add(eyeR);
+  for (const side of [-1, 1]) {
+    addMesh(
+      headGroup,
+      new THREE.ConeGeometry(0.11, 0.36, 7),
+      materials.horn,
+      [side * 0.56, 0.68, -0.02],
+      [1, 1, 1],
+      [0.12, 0, side * -0.28],
+    );
+  }
 
-  const pupilR = new THREE.Mesh(pupilGeo, pupilMat);
-  pupilR.name = 'pupilR';
-  pupilR.position.set(11, 5, -8);
-  headGroup.add(pupilR);
+  const tuftPositions = [
+    [-0.4, 0.78, -0.05, 0.24],
+    [0.12, 0.9, -0.02, 0.3],
+    [0.48, 0.72, -0.1, 0.22],
+    [-0.12, 0.82, 0.18, 0.18],
+  ];
+  for (const [x, y, z, height] of tuftPositions) {
+    addMesh(
+      headGroup,
+      new THREE.ConeGeometry(0.13, height, 6),
+      materials.fur,
+      [x, y, z],
+      [1, 1, 1],
+      [rand(-0.2, 0.2), rand(-0.3, 0.3), rand(-0.2, 0.2)],
+    );
+  }
 
-  // Brows — thick boxes above eyes
-  const browGeo = new THREE.BoxGeometry(8, 2.5, 2);
+  const shoulderR = new THREE.Group();
+  shoulderR.position.set(0.85, 3.1, 0.45);
+  rig.add(shoulderR);
 
-  const browL = new THREE.Mesh(browGeo, browMat);
-  browL.name = 'browL';
-  browL.position.set(8, 10, 8);
-  headGroup.add(browL);
+  addMesh(
+    shoulderR,
+    new THREE.CapsuleGeometry(0.24, 1.1, 5, 10),
+    materials.fur,
+    [0, -0.7, 0],
+  );
+  addMesh(
+    shoulderR,
+    new THREE.SphereGeometry(0.29, 12, 10),
+    materials.fur,
+    [0, -1.3, 0],
+  );
 
-  const browR = new THREE.Mesh(browGeo, browMat);
-  browR.name = 'browR';
-  browR.position.set(8, 10, -8);
-  headGroup.add(browR);
+  const club = new THREE.Group();
+  club.position.set(0, -1.3, 0);
+  shoulderR.add(club);
 
-  // Mouth — open box
-  const mouthGeo = new THREE.BoxGeometry(6, 5, 10);
-  const mouth = new THREE.Mesh(mouthGeo, mouthMat);
-  mouth.name = 'mouth';
-  mouth.position.set(11, -5, 0);
-  headGroup.add(mouth);
+  addMesh(
+    club,
+    new THREE.CylinderGeometry(0.075, 0.09, 1.0, 8),
+    materials.woodDark,
+    [0, -0.5, 0],
+  );
+  addMesh(
+    club,
+    new THREE.CylinderGeometry(0.11, 0.11, 0.1, 8),
+    materials.ice,
+    [0, -0.98, 0],
+  );
+  addMesh(
+    club,
+    new THREE.CapsuleGeometry(0.26, 0.45, 5, 12),
+    materials.wood,
+    [0, -1.45, 0],
+    [1, 1, 0.9],
+  );
+  addMesh(
+    club,
+    new THREE.SphereGeometry(0.26, 12, 10),
+    materials.woodDark,
+    [0, -1.98, 0],
+    [1, 0.55, 0.9],
+  );
+  addMesh(
+    club,
+    new THREE.TorusGeometry(0.27, 0.035, 6, 14),
+    materials.ice,
+    [0, -1.72, 0],
+    [1, 1, 1],
+    [Math.PI / 2, 0, 0],
+  );
 
-  // Tongue
-  const tongueGeo = new THREE.BoxGeometry(3, 3, 6);
-  const tongue = new THREE.Mesh(tongueGeo, tongueMat);
-  tongue.position.set(10, -6, 0);
-  headGroup.add(tongue);
+  const clubTip = new THREE.Object3D();
+  clubTip.position.set(0, -2.02, 0);
+  club.add(clubTip);
 
-  headGroup.position.y = 38;
-  bodyGroup.add(headGroup);
+  const shoulderL = new THREE.Group();
+  shoulderL.position.set(-0.95, 3.05, -0.12);
+  rig.add(shoulderL);
+  addMesh(
+    shoulderL,
+    new THREE.CapsuleGeometry(0.22, 1.05, 5, 10),
+    materials.fur,
+    [0, -0.68, 0],
+  );
+  addMesh(
+    shoulderL,
+    new THREE.SphereGeometry(0.27, 12, 10),
+    materials.fur,
+    [0, -1.25, 0],
+  );
 
-  // Club arm — pivot group for swinging
-  // The pivot is at the shoulder (back of yeti, away from penguin)
-  const clubArmGroup = new THREE.Group();
-  clubArmGroup.name = 'clubArm';
-  clubArmGroup.position.set(-14, 16, 0); // shoulder pivot
+  for (const side of [-1, 1]) {
+    addMesh(
+      rig,
+      new THREE.CapsuleGeometry(0.3, 0.35, 5, 10),
+      materials.furShade,
+      [side * 0.45, 0.55, 0.08],
+    );
+    addMesh(
+      rig,
+      new THREE.SphereGeometry(0.3, 12, 10),
+      materials.fur,
+      [side * 0.45, 0.13, 0.24],
+      [1.1, 0.42, 1.45],
+    );
+  }
 
-  // Upper arm
-  const upperArmGeo = new THREE.BoxGeometry(20, 6, 6);
-  const upperArm = new THREE.Mesh(upperArmGeo, bodyMat);
-  upperArm.position.set(-8, 0, 0);
-  clubArmGroup.add(upperArm);
+  const furTufts = [];
+  const tuftMaterial = materials.furShade;
+  for (let i = 0; i < 14; i += 1) {
+    const angle = (i / 14) * Math.PI * 2;
+    const radius = 0.92 + rand(-0.08, 0.1);
+    const tuft = addMesh(
+      rig,
+      new THREE.ConeGeometry(rand(0.1, 0.18), rand(0.28, 0.5), 5),
+      tuftMaterial,
+      [
+        Math.cos(angle) * radius,
+        2.0 + rand(-0.55, 0.55),
+        Math.sin(angle) * radius * 0.72,
+      ],
+      [1, 1, 1],
+      [rand(-0.4, 0.4), angle, rand(-0.4, 0.4)],
+    );
+    tuft.castShadow = true;
+    furTufts.push(tuft);
+  }
 
-  // Forearm
-  const forearmGeo = new THREE.BoxGeometry(16, 5, 5);
-  const forearm = new THREE.Mesh(forearmGeo, bodyMat);
-  forearm.position.set(-18, 0, 0);
-  clubArmGroup.add(forearm);
+  const state = {
+    root,
+    rig,
+    headGroup,
+    shoulderR,
+    shoulderL,
+    club,
+    clubTip,
+    eyeGroups,
+    brows,
+    mouth,
+    muzzle,
+    materials,
+    restAngle: -1.86,
+    windupAngle: -2.32,
+    impactAngle: 0.58,
+    followAngle: 1.26,
+    blinkTimer: rand(1.8, 4.4),
+    blinkTime: 0,
+    impactTimer: 0,
+    lean: 0,
+    bob: 0,
+    lastState: "",
+  };
 
-  // Club handle
-  const handleGeo = new THREE.BoxGeometry(24, 4, 4);
-  const handle = new THREE.Mesh(handleGeo, handleMat);
-  handle.position.set(-28, 0, 0);
-  clubArmGroup.add(handle);
+  const reset = () => {
+    rig.position.set(0, 0, 0);
+    rig.rotation.set(0, 0, 0);
+    headGroup.rotation.set(0, 0, 0);
+    shoulderR.rotation.set(0, 0, state.restAngle);
+    shoulderL.rotation.set(0, 0, 0.08);
+    for (const eye of eyeGroups) eye.scale.set(1, 1, 1);
+    for (const brow of brows)
+      brow.rotation.z = Math.sign(brow.position.x) * -0.16;
+    mouth.scale.set(0.92, 0.34, 0.18);
+    state.blinkTimer = rand(1.8, 4.4);
+    state.blinkTime = 0;
+    state.impactTimer = 0;
+    state.lean = 0;
+    state.bob = 0;
+  };
 
-  // Club head — larger block at the end
-  const clubHeadGeo = new THREE.BoxGeometry(14, 12, 10);
-  const clubHead = new THREE.Mesh(clubHeadGeo, clubHeadMat);
-  clubHead.position.set(-38, 2, 0);
-  clubHead.castShadow = true;
-  clubArmGroup.add(clubHead);
+  const swingAngle = (t) => {
+    const clamped = clamp(t, 0, 1);
+    if (clamped < 0.5) {
+      return lerp(
+        state.windupAngle,
+        state.impactAngle,
+        easeInCubic(clamped * 2),
+      );
+    }
+    return lerp(
+      state.impactAngle,
+      state.followAngle,
+      easeOutCubic((clamped - 0.5) * 2),
+    );
+  };
 
-  // Club detail — bands on the club head
-  const bandGeo = new THREE.BoxGeometry(1, 13, 11);
-  const band1 = new THREE.Mesh(bandGeo, clubDetailMat);
-  band1.position.set(-34, 2, 0);
-  clubArmGroup.add(band1);
+  const update = (dt, time, currentState, params = {}) => {
+    const charge = params.charge ?? 0;
+    const swingT = params.swingT ?? 0;
+    const lookAngle = params.lookAngle ?? Math.PI / 2;
 
-  const band2 = new THREE.Mesh(bandGeo, clubDetailMat);
-  band2.position.set(-42, 2, 0);
-  clubArmGroup.add(band2);
+    state.blinkTimer -= dt;
+    if (state.blinkTimer <= 0) {
+      state.blinkTime = 0.12;
+      state.blinkTimer = rand(2.4, 5.4);
+    }
+    if (state.blinkTime > 0) {
+      state.blinkTime -= dt;
+      const blink = state.blinkTime > 0 ? 0.12 : 1;
+      for (const eye of eyeGroups) eye.scale.y = blink;
+    } else {
+      for (const eye of eyeGroups) eye.scale.y = damp(eye.scale.y, 1, 18, dt);
+    }
 
-  group.add(clubArmGroup);
+    let targetBob = Math.sin(time * 1.5) * 0.022;
+    let targetLean = 0;
+    let armAngle = state.restAngle;
+    let leftArmAngle = 0.08;
+    let headX = 0.02;
+    let headY = 0.24;
+    let headZ = 0;
+    let browAngle = -0.16;
+    let mouthScale = [0.92, 0.34, 0.18];
 
-  group.position.set(x, y, 0);
-  scene.add(group);
+    if (currentState === "idle" || currentState === "title") {
+      armAngle = state.restAngle + Math.sin(time * 0.8) * 0.015;
+      leftArmAngle = 0.08 + Math.sin(time * 1.1) * 0.03;
+      headY = 0.28 + Math.sin(time * 0.45) * 0.08;
+      headZ = Math.sin(time * 0.8) * 0.02;
+    } else if (currentState === "windup") {
+      armAngle = lerp(state.restAngle, state.windupAngle, easeOutCubic(charge));
+      leftArmAngle = 0.08 + charge * 0.35;
+      targetLean = -0.02 - charge * 0.07;
+      headX = 0.08;
+      headY = 0.34;
+      browAngle = -0.3;
+      mouthScale = [0.92, 0.3, 0.18];
+      targetBob = Math.sin(time * 30) * charge * 0.008;
+    } else if (currentState === "swing") {
+      armAngle = swingAngle(swingT);
+      leftArmAngle = lerp(0.35, -0.45, clamp(swingT * 1.4, 0, 1));
+      targetLean = lerp(-0.08, 0.1, clamp(swingT * 1.5, 0, 1));
+      headX = 0.12;
+      headY = 0.4;
+      browAngle = -0.35;
+      mouthScale =
+        swingT > 0.42 && swingT < 0.7 ? [1.1, 0.55, 0.24] : [0.92, 0.3, 0.18];
+    } else if (currentState === "follow") {
+      armAngle = damp(state.shoulderR.rotation.z, state.followAngle, 6, dt);
+      leftArmAngle = -0.3;
+      targetLean = 0.08;
+      headX = 0.15;
+      headY = 0.38;
+      mouthScale = [1.0, 0.42, 0.2];
+    } else if (currentState === "celebrate") {
+      armAngle = -2.7 + Math.sin(time * 5) * 0.08;
+      leftArmAngle = 2.5 + Math.sin(time * 5 + 0.6) * 0.08;
+      targetBob = Math.abs(Math.sin(time * 5.5)) * 0.12;
+      targetLean = -0.04;
+      headX = -0.12;
+      headY = 0;
+      browAngle = 0.05;
+      mouthScale = [1.0, 0.5, 0.22];
+    } else if (currentState === "slump") {
+      armAngle = state.restAngle + 0.35;
+      leftArmAngle = 0.3;
+      targetLean = 0.06;
+      headX = 0.35;
+      headY = 0.1;
+      browAngle = 0.2;
+      mouthScale = [0.8, 0.22, 0.18];
+    }
 
-  return group;
+    state.bob = damp(state.bob, targetBob, 6, dt);
+    state.lean = damp(state.lean, targetLean, 7, dt);
+    rig.position.y = state.bob;
+    rig.rotation.z = state.lean;
+
+    shoulderR.rotation.z = damp(
+      shoulderR.rotation.z,
+      armAngle,
+      currentState === "swing" ? 30 : 10,
+      dt,
+    );
+    shoulderL.rotation.z = damp(shoulderL.rotation.z, leftArmAngle, 10, dt);
+
+    headGroup.rotation.x = damp(headGroup.rotation.x, headX, 8, dt);
+    headGroup.rotation.y = damp(headGroup.rotation.y, lookAngle + headY, 6, dt);
+    headGroup.rotation.z = damp(headGroup.rotation.z, headZ, 6, dt);
+
+    for (const brow of brows) {
+      const side = Math.sign(brow.position.x) || 1;
+      brow.rotation.z = damp(brow.rotation.z, side * browAngle, 9, dt);
+    }
+    mouth.scale.x = damp(mouth.scale.x, mouthScale[0], 10, dt);
+    mouth.scale.y = damp(mouth.scale.y, mouthScale[1], 10, dt);
+    mouth.scale.z = damp(mouth.scale.z, mouthScale[2], 10, dt);
+
+    if (state.impactTimer > 0) {
+      state.impactTimer -= dt;
+      const impact = clamp(state.impactTimer / 0.35, 0, 1);
+      for (const eye of eyeGroups)
+        eye.scale.set(1 + impact * 0.25, 1 + impact * 0.25, 1);
+    } else {
+      for (const eye of eyeGroups) eye.scale.x = damp(eye.scale.x, 1, 12, dt);
+      for (const eye of eyeGroups) eye.scale.z = damp(eye.scale.z, 1, 12, dt);
+    }
+
+    state.lastState = currentState;
+  };
+
+  const impact = () => {
+    state.impactTimer = 0.35;
+  };
+
+  const celebrate = () => {
+    state.impactTimer = 0;
+  };
+
+  reset();
+
+  return {
+    root,
+    rig,
+    parts: state,
+    update,
+    reset,
+    impact,
+    celebrate,
+    getClubTip: () => {
+      clubTip.updateWorldMatrix(true, false);
+      return clubTip.getWorldPosition(new THREE.Vector3());
+    },
+  };
 }
