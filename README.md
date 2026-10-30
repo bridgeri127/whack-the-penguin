@@ -6,11 +6,11 @@ A modern, no-build-step 3D take on the classic “Smack the Pingu” distance ga
 
 ## Play
 
-1. **Drop** — press Space, click, or tap to send the penguin off the cliff.
-2. **Swing** — tap anywhere to make the yeti swing the club.
-3. **Fly** — the penguin jumps straight down just in front of the yeti and launches at the angle of the strike; distance is calculated from that angle.
+1. **Drop** — press Space, click, or tap to make the penguin jump down while the yeti's club swings.
+2. **Hit** — if the moving penguin is still airborne when the club strikes, it launches at the angle of the strike; distance is calculated from that angle.
+3. **Fly** — bounces, lands, and the result card tracks the distance.
 
-Your best distance is saved in `localStorage`. Press **M** to toggle sound.
+Your best distance is saved in `localStorage`. Press **M** to toggle sound. One swing per round; if the penguin reaches the floor before the swing connects, the round is over.
 
 ## Run locally
 

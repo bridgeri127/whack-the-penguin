@@ -41,7 +41,6 @@ const flight = createFlight((event) => handleFlightEvent(event));
 const state = {
   mode: STATE.TITLE,
   modeTime: 0,
-  readyT: 0,
   swingT: 0,
   impactDone: false,
   landT: 0,
@@ -97,7 +96,6 @@ function beginRound() {
   ui.setHint("", false);
 
   state.round += 1;
-  state.readyT = 0;
   state.swingT = 0;
   state.impactDone = false;
   state.landT = 0;
@@ -117,18 +115,8 @@ function beginRound() {
   setMode(STATE.DROP_READY);
 }
 
-function startDrop() {
-  if (state.mode !== STATE.DROP_READY) return;
-  setMode(STATE.DROPPING);
-  penguin.root.position.set(PENGUIN_JUMP.x, PENGUIN_JUMP.y, 0);
-  penguin.root.rotation.set(0, 0, 0);
-  state.dropVx = 0;
-  state.dropVy = -1.2;
-  audio.play("drop");
-}
-
 function startSwing() {
-  if (state.mode !== STATE.READY) return;
+  if (state.mode !== STATE.DROP_READY) return;
   setMode(STATE.SWINGING);
   state.swingT = 0;
   state.impactDone = false;
@@ -260,8 +248,6 @@ function handlePrimary() {
   if (state.mode === STATE.TITLE) {
     beginRound();
   } else if (state.mode === STATE.DROP_READY) {
-    startDrop();
-  } else if (state.mode === STATE.READY) {
     startSwing();
   } else if (state.mode === STATE.RESULT) {
     beginRound();
@@ -309,40 +295,6 @@ function updateGame(dt) {
     return;
   }
 
-  if (state.mode === STATE.DROPPING) {
-    state.dropVy -= DROP_GRAVITY * dt;
-    penguin.root.position.x += state.dropVx * dt;
-    penguin.root.position.y += state.dropVy * dt;
-    penguin.update(dt, clockTime, "fall", {});
-    yeti.update(dt, clockTime, "idle", { lookAngle: 0.9 });
-
-    if (penguin.root.position.y <= 0) {
-      penguin.root.position.set(penguin.root.position.x, 0, 0);
-      penguin.impact();
-      particles.puff(
-        new THREE.Vector3(penguin.root.position.x, 0.08, 0),
-        22,
-        1,
-      );
-      audio.play("land");
-      cameraRig.kick(0.18);
-      cameraRig.setMode("ready");
-      state.readyT = 0;
-      state.dropVy = 0;
-      setMode(STATE.READY);
-      ui.setHint("", false);
-    }
-    return;
-  }
-
-  if (state.mode === STATE.READY) {
-    state.readyT += dt;
-    penguin.update(dt, clockTime, state.readyT < 0.26 ? "land" : "idle", {});
-    yeti.update(dt, clockTime, "idle", { lookAngle: LOOK_RIGHT });
-    cameraRig.setMode("ready");
-    return;
-  }
-
   if (state.mode === STATE.SWINGING) {
     updateSwing(dt);
     if (state.mode === STATE.FLYING) return;
@@ -353,6 +305,21 @@ function updateGame(dt) {
       penguin.root.position.x = PENGUIN_JUMP.x;
       penguin.root.position.z = 0;
       penguin.update(dt, clockTime, "fall", {});
+      if (penguin.root.position.y <= 0) {
+        // Too late: the penguin reached the floor before the swing connected.
+        penguin.landed();
+        particles.puff(
+          new THREE.Vector3(penguin.root.position.x, 0.08, 0),
+          22,
+          1,
+        );
+        audio.play("land");
+        cameraRig.kick(0.18);
+        cameraRig.setMode("landed");
+        state.landT = 0;
+        setMode(STATE.LANDED);
+        return;
+      }
     }
     cameraRig.setMode("swing");
     return;
@@ -472,7 +439,7 @@ environment.setBest(state.best);
 ui.setBest(state.best);
 ui.setSoundMuted(audio.isMuted());
 ui.showTitle();
-ui.setHint("Click or press space to drop the penguin");
+ui.setHint("Tap to swing the yeti");
 cameraRig.setMode("title");
 
 window.__PINGU__ = {

@@ -1,10 +1,10 @@
 # Smack the Pingu — Design & Tech Notes
 
-A stylized 3D recreation of the classic distance-launch game. The player drops a penguin from a cliff, taps to swing the yeti's club, and launches the penguin at the angle of the strike.
+A stylized 3D recreation of the classic distance-launch game. The player starts with the penguin on the ledge, taps to make it drop while the yeti swings, and launches the penguin at the angle of the strike.
 
 ## Goals
 
-- Keep the original one-more-try loop: drop → tap to swing → watch it fly → beat the best.
+- Keep the original one-more-try loop: tap → swing → watch it fly → beat the best.
 - Make the launch timing-based: the penguin jumps straight down just in front of the yeti, and distance is derived from the angle of the strike.
 
 ## Game flow
@@ -12,10 +12,8 @@ A stylized 3D recreation of the classic distance-launch game. The player drops a
 | State        | What happens                                                              |
 | ------------ | ------------------------------------------------------------------------- |
 | `title`      | Penguin waits on the ledge; title card is shown.                          |
-| `drop_ready` | Short beat before the penguin hops off.                                   |
-| `dropping`   | Projectile drop from the ledge to the landing spot.                       |
-| `ready`      | Penguin lands; player taps to swing.                                      |
-| `swinging`   | Club sweeps through the impact frame; penguin jumps down in front.        |
+| `drop_ready` | Penguin waits on the ledge above the yeti; first tap starts the swing.   |
+| `swinging`   | Penguin jumps down just in front of the yeti; club strikes moving penguin. |
 | `flying`     | Penguin launches at the strike angle, spins, bounces, and camera follows. |
 | `landed`     | Short settle; result card is prepared.                                    |
 | `result`     | Distance, rank, best, share, and replay.                                  |

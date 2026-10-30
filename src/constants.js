@@ -14,8 +14,6 @@ export const COLORS = {
 export const STATE = {
   TITLE: "title",
   DROP_READY: "drop_ready",
-  DROPPING: "dropping",
-  READY: "ready",
   SWINGING: "swinging",
   FLYING: "flying",
   LANDED: "landed",
