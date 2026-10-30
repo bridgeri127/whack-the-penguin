@@ -16,7 +16,6 @@ export const STATE = {
   DROP_READY: "drop_ready",
   DROPPING: "dropping",
   READY: "ready",
-  CHARGING: "charging",
   SWINGING: "swinging",
   FLYING: "flying",
   LANDED: "landed",
@@ -29,18 +28,13 @@ export const YETI_POS = { x: -3.6, y: 0.4, z: 0 };
 export const HIT_X = PENGUIN_LAND.x;
 
 export const GRAVITY = 20;
-export const LAUNCH = {
-  minSpeed: 18,
-  maxSpeed: 64,
-  minAngle: 40,
-  maxAngle: 48,
-};
-
-export const PERFECT_MIN = 0.85;
-export const CHARGE_UP_TIME = 0.9;
-export const CHARGE_DOWN_TIME = 0.62;
 export const SWING_DURATION = 0.34;
 export const SWING_IMPACT_T = 0.5;
+
+// Timing-based launch: the penguin jumps straight down just in front of the yeti
+// and launches at the angle of the club strike.
+export const PENGUIN_JUMP = { x: -1.8, y: 6.4 };
+export const LAUNCH = { baseSpeed: 44, minAngle: 10, maxAngle: 72 };
 
 export const DROP_VX = 10.5;
 export const DROP_VY = 2.2;

@@ -1,50 +1,37 @@
 # Smack the Pingu — Design & Tech Notes
 
-A stylized 3D recreation of the classic distance-launch game. The player drops a penguin from a cliff, charges a yeti's club swing, and times the release to launch the penguin as far as possible.
+A stylized 3D recreation of the classic distance-launch game. The player drops a penguin from a cliff, taps to swing the yeti's club, and launches the penguin at the angle of the strike.
 
 ## Goals
 
-- Keep the original one-more-try loop: drop → charge → release → watch it fly → beat the best.
-- Make the timing readable and satisfying with a hold-to-charge meter that oscillates through a gold perfect zone.
-- Replace the old flat presentation with a low-poly arctic diorama, cinematic follow camera, particles, and procedural audio.
-- Run as static files with no build step and no runtime CDN dependency for Three.js.
+- Keep the original one-more-try loop: drop → tap to swing → watch it fly → beat the best.
+- Make the launch timing-based: the penguin jumps straight down just in front of the yeti, and distance is derived from the angle of the strike.
 
 ## Game flow
 
-| State        | What happens                                                          |
-| ------------ | --------------------------------------------------------------------- |
-| `title`      | Penguin waits on the ledge; title card is shown.                      |
-| `drop_ready` | Short beat before the penguin hops off.                               |
-| `dropping`   | Projectile drop from the ledge to the landing spot.                   |
-| `ready`      | Penguin lands; charge meter appears.                                  |
-| `charging`   | Meter rises to 100% then falls; yeti winds up; release to lock power. |
-| `swinging`   | Club sweeps through the impact frame.                                 |
-| `flying`     | Penguin launches, spins, bounces, and the camera follows.             |
-| `landed`     | Short settle; result card is prepared.                                |
-| `result`     | Distance, rank, best, share, and replay.                              |
+| State        | What happens                                                              |
+| ------------ | ------------------------------------------------------------------------- |
+| `title`      | Penguin waits on the ledge; title card is shown.                          |
+| `drop_ready` | Short beat before the penguin hops off.                                   |
+| `dropping`   | Projectile drop from the ledge to the landing spot.                       |
+| `ready`      | Penguin lands; player taps to swing.                                      |
+| `swinging`   | Club sweeps through the impact frame; penguin jumps down in front.        |
+| `flying`     | Penguin launches at the strike angle, spins, bounces, and camera follows. |
+| `landed`     | Short settle; result card is prepared.                                    |
+| `result`     | Distance, rank, best, share, and replay.                                  |
 
 ## Mechanics
 
-- **Power** is sampled from a triangle wave: 0 → 1 over `CHARGE_UP_TIME`, then back down over `CHARGE_DOWN_TIME`.
-- **Perfect zone** starts at `PERFECT_MIN` (85% of the meter). A perfect hit gets a small speed bonus and a badge.
-- **Launch velocity** is derived from power:
-  - speed: `18 → 64` units/s
-  - angle: `40° → 48°`
-  - gravity: `20` units/s²
-- **Flight** integrates gravity, applies up to two energy-losing bounces, and tracks distance from the landing spot.
-- **Best distance** is persisted as `pinguSmashBest`; sound preference as `pinguSmashMuted`.
+- **Launch** is derived from the angle of the club strike at impact (`getLaunchVelocity(angleDeg)`).
+- **Flight** integrates gravity, applies up to two energy-losing bounces, and tracks distance from the launch point.
 
 ## Visual system
 
 - Stylized low-poly arctic scene: ice cliff, snow field, pine trees, layered mountains, aurora, stars, moon, and snowfall.
 - Procedural characters: penguin with squash/stretch, blink, scarf, and flipper animation; yeti with fur tufts, expressions, club wind-up, swing, follow-through, and celebration.
-- Camera modes for title, ready, charge, swing, flight, landing, and result, with portrait-specific framing.
+- Camera modes for title, ready, swing, flight, landing, and result, with portrait-specific framing.
 - Particles: snow puffs, impact sparks, shockwave rings, launch trails, and celebration confetti.
-- UI: glass cards, gradient display type, live distance HUD, charge meter with perfect zone, sound toggle, share/copy result.
-
-## Audio
-
-All sounds are synthesized with the Web Audio API: UI ticks, drop whoosh, landing thuds, swing whoosh, impact crack, bounce, celebration arpeggio, best-score chime, and a rising charge tone. Audio unlocks on the first gesture and respects the mute toggle.
+- UI: glass cards, gradient display type, live distance HUD, sound toggle, share/copy result.
 
 ## File map
 
@@ -71,8 +58,7 @@ vendor/             local Three.js r170 module
 
 Most feel changes live in `src/constants.js`:
 
-- `CHARGE_UP_TIME`, `CHARGE_DOWN_TIME` — charge meter cadence
-- `PERFECT_MIN` — perfect timing window
-- `LAUNCH.minSpeed`, `LAUNCH.maxSpeed`, `LAUNCH.minAngle`, `LAUNCH.maxAngle` — distance range
+- `LAUNCH.baseSpeed`, `LAUNCH.minAngle`, `LAUNCH.maxAngle` — strike-angle launch tuning
+- `SWING_DURATION`, `SWING_IMPACT_T` — swing timing
 - `BOUNCE_DAMPING`, `BOUNCE_FRICTION`, `SETTLE_BOUNCES` — bounce feel
 - `RANKS` — result titles and thresholds

@@ -16,8 +16,6 @@ export function createAudio() {
   let master = null;
   let noiseBuffer = null;
   let muted = false;
-  let chargeOscillator = null;
-  let chargeGain = null;
 
   try {
     muted = localStorage.getItem(STORAGE_MUTE) === "true";
@@ -207,53 +205,11 @@ export function createAudio() {
     }
   };
 
-  const startCharge = () => {
-    if (muted || !ensure() || chargeOscillator) return;
-    const now = context.currentTime;
-    chargeOscillator = context.createOscillator();
-    chargeGain = context.createGain();
-    const filter = context.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.value = 1200;
-    chargeOscillator.type = "sawtooth";
-    chargeOscillator.frequency.setValueAtTime(120, now);
-    chargeGain.gain.setValueAtTime(0.0001, now);
-    chargeGain.gain.exponentialRampToValueAtTime(0.03, now + 0.06);
-    chargeOscillator.connect(filter);
-    filter.connect(chargeGain);
-    chargeGain.connect(master);
-    chargeOscillator.start(now);
-  };
-
-  const updateCharge = (power) => {
-    if (!chargeOscillator || !context) return;
-    const now = context.currentTime;
-    chargeOscillator.frequency.setTargetAtTime(120 + power * 540, now, 0.035);
-    if (chargeGain) {
-      chargeGain.gain.setTargetAtTime(0.022 + power * 0.03, now, 0.05);
-    }
-  };
-
-  const stopCharge = () => {
-    if (!chargeOscillator || !context) return;
-    const now = context.currentTime;
-    const oscillator = chargeOscillator;
-    const gain = chargeGain;
-    chargeOscillator = null;
-    chargeGain = null;
-    if (gain) {
-      gain.gain.cancelScheduledValues(now);
-      gain.gain.setTargetAtTime(0.0001, now, 0.03);
-    }
-    oscillator.stop(now + 0.16);
-  };
-
   const setMuted = (nextMuted) => {
     muted = nextMuted;
     if (master && context) {
       master.gain.setTargetAtTime(muted ? 0 : 0.72, context.currentTime, 0.03);
     }
-    if (muted) stopCharge();
     try {
       localStorage.setItem(STORAGE_MUTE, String(muted));
     } catch {
@@ -272,9 +228,6 @@ export function createAudio() {
 
   return {
     play,
-    startCharge,
-    updateCharge,
-    stopCharge,
     setMuted,
     toggleMuted,
     isMuted: () => muted,

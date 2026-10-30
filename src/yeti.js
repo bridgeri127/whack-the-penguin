@@ -313,6 +313,7 @@ export function createYeti() {
     windupAngle: -2.32,
     impactAngle: 0.58,
     followAngle: 1.26,
+    armAngle: 0,
     blinkTimer: rand(1.8, 4.4),
     blinkTime: 0,
     impactTimer: 0,
@@ -433,6 +434,7 @@ export function createYeti() {
 
     state.bob = damp(state.bob, targetBob, 6, dt);
     state.lean = damp(state.lean, targetLean, 7, dt);
+    state.armAngle = armAngle;
     rig.position.y = state.bob;
     rig.rotation.z = state.lean;
 
@@ -491,5 +493,6 @@ export function createYeti() {
       clubTip.updateWorldMatrix(true, false);
       return clubTip.getWorldPosition(new THREE.Vector3());
     },
+    getStrikeAngle: () => state.armAngle,
   };
 }

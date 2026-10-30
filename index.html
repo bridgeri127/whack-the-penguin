@@ -10,7 +10,7 @@
     <title>Smack the Pingu — Arctic Arcade</title>
     <meta
       name="description"
-      content="Drop the penguin, charge the yeti's club, and launch the pingu as far as the tundra allows."
+      content="Drop the penguin, swing the yeti's club, and launch the pingu as far as the tundra allows."
     />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -110,7 +110,7 @@
         <p class="eyebrow"><span class="eyebrow-dot"></span> ARCTIC ARCADE</p>
         <h1><span>SMACK</span><span class="title-accent">THE PINGU</span></h1>
         <p class="lede">
-          Charge the yeti's club. Launch the penguin. Make the tundra remember.
+          Swing the yeti's club. Launch the penguin. Make the tundra remember.
         </p>
 
         <div class="steps">
@@ -124,15 +124,15 @@
           <div class="step">
             <span class="step-num">02</span>
             <div>
-              <strong>CHARGE</strong>
-              <p>Hold to wind up the yeti's club.</p>
+              <strong>SWING</strong>
+              <p>Tap to swing the yeti's club.</p>
             </div>
           </div>
           <div class="step">
             <span class="step-num">03</span>
             <div>
               <strong>RELEASE</strong>
-              <p>Let go in the perfect zone. Watch it fly.</p>
+              <p>Let go and watch it fly.</p>
             </div>
           </div>
         </div>
@@ -185,9 +185,6 @@
           <div class="result-best">
             <span>PERSONAL BEST</span><strong id="resultBest">0.0m</strong>
           </div>
-          <div id="resultPerfect" class="perfect-badge is-hidden">
-            PERFECT HIT
-          </div>
         </div>
         <div class="card-actions">
           <button id="againBtn" class="primary-btn" type="button">
@@ -209,24 +206,6 @@
         </div>
         <p class="result-foot">SPACE / CLICK TO PLAY AGAIN</p>
       </section>
-
-      <div id="chargePanel" class="charge-panel is-hidden" aria-live="polite">
-        <div class="charge-topline">
-          <span id="chargeLabel">HOLD TO CHARGE</span>
-          <span id="chargePercent">0%</span>
-        </div>
-        <div id="chargePanelInner" class="charge-track">
-          <div class="perfect-zone"></div>
-          <div id="chargeFill" class="charge-fill"></div>
-          <div id="chargeMarker" class="charge-marker"></div>
-          <div class="charge-ticks"></div>
-        </div>
-        <div class="charge-bottomline">
-          <span>HOLD</span>
-          <span class="perfect-copy">PERFECT ZONE</span>
-          <span>RELEASE</span>
-        </div>
-      </div>
 
       <div id="hint" class="hint is-hidden">
         Click or press space to drop the penguin

@@ -1,14 +1,14 @@
 # Smack the Pingu
 
-A modern, no-build-step 3D take on the classic “Smack the Pingu” distance game. Drop a penguin off the ledge, charge the yeti's club, release in the perfect zone, and send it as far as the tundra allows.
+A modern, no-build-step 3D take on the classic “Smack the Pingu” distance game. Drop a penguin off the ledge, swing the yeti's club, and launch the pingu as far as the tundra allows.
 
 ![Smack the Pingu](https://img.shields.io/badge/three.js-r170-8fe8ff?style=flat-square) ![No build step](https://img.shields.io/badge/build-none-7dffc4?style=flat-square)
 
 ## Play
 
 1. **Drop** — press Space, click, or tap to send the penguin off the cliff.
-2. **Charge** — hold anywhere (or hold Space) to wind up the yeti's club.
-3. **Release** — let go while the meter is in the gold perfect zone. The penguin flies, bounces, and lands.
+2. **Swing** — tap anywhere to make the yeti swing the club.
+3. **Fly** — the penguin jumps straight down just in front of the yeti and launches at the angle of the strike; distance is calculated from that angle.
 
 Your best distance is saved in `localStorage`. Press **M** to toggle sound.
 

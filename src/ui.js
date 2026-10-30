@@ -29,7 +29,6 @@ export function createUI({
   const elements = {
     titleCard: document.getElementById("titleCard"),
     resultCard: document.getElementById("resultCard"),
-    chargePanel: document.getElementById("chargePanel"),
     liveHud: document.getElementById("liveHud"),
     loading: document.getElementById("loading"),
     bestValue: document.getElementById("bestValue"),
@@ -38,18 +37,12 @@ export function createUI({
     againBtn: document.getElementById("againBtn"),
     shareBtn: document.getElementById("shareBtn"),
     soundBtn: document.getElementById("soundBtn"),
-    chargeFill: document.getElementById("chargeFill"),
-    chargeMarker: document.getElementById("chargeMarker"),
-    chargePercent: document.getElementById("chargePercent"),
-    chargeLabel: document.getElementById("chargeLabel"),
-    chargePanelInner: document.getElementById("chargePanelInner"),
     liveDistance: document.getElementById("liveDistance"),
     liveMeta: document.getElementById("liveMeta"),
     resultDistance: document.getElementById("resultDistance"),
     resultBest: document.getElementById("resultBest"),
     resultRank: document.getElementById("resultRank"),
     resultMessage: document.getElementById("resultMessage"),
-    resultPerfect: document.getElementById("resultPerfect"),
     newBestBadge: document.getElementById("newBestBadge"),
     toast: document.getElementById("toast"),
     hint: document.getElementById("hint"),
@@ -73,37 +66,6 @@ export function createUI({
   const showResultCard = () => setVisible(elements.resultCard, true);
   const hideResultCard = () => setVisible(elements.resultCard, false);
 
-  const showCharge = (visible) => {
-    setVisible(elements.chargePanel, visible);
-    if (visible) {
-      elements.chargePanel.classList.remove("is-perfect");
-      elements.chargePanel.classList.remove("is-active");
-      updateCharge(0, false);
-      if (elements.chargeLabel)
-        elements.chargeLabel.textContent = "HOLD TO CHARGE";
-    }
-  };
-
-  const setChargeActive = (active) => {
-    elements.chargePanel?.classList.toggle("is-active", active);
-  };
-
-  const updateCharge = (power, perfect = false) => {
-    const clamped = Math.max(0, Math.min(1, power));
-    const percent = Math.round(clamped * 100);
-    if (elements.chargeFill) elements.chargeFill.style.width = `${percent}%`;
-    if (elements.chargeMarker) elements.chargeMarker.style.left = `${percent}%`;
-    if (elements.chargePercent)
-      elements.chargePercent.textContent = `${percent}%`;
-    if (elements.chargePanel) {
-      elements.chargePanel.style.setProperty("--power", clamped.toFixed(3));
-      elements.chargePanel.classList.toggle("is-perfect", perfect);
-    }
-    if (elements.chargeLabel) {
-      elements.chargeLabel.textContent = perfect ? "PERFECT!" : "CHARGING";
-    }
-  };
-
   const showLive = (visible) => setVisible(elements.liveHud, visible);
 
   const updateLive = (distance, height = 0, state = "AIRBORNE") => {
@@ -116,7 +78,7 @@ export function createUI({
     }
   };
 
-  const showResult = ({ distance, bestDistance, isNewBest, rank, perfect }) => {
+  const showResult = ({ distance, bestDistance, isNewBest, rank }) => {
     if (!elements.resultCard) return;
     if (resultAnimationFrame) cancelAnimationFrame(resultAnimationFrame);
     elements.resultDistance.textContent = "0.0";
@@ -124,7 +86,6 @@ export function createUI({
     elements.resultBest.textContent = formatMeters(bestDistance);
     elements.resultRank.textContent = rank.title;
     elements.resultMessage.textContent = rank.message;
-    elements.resultPerfect.classList.toggle("is-hidden", !perfect);
     elements.newBestBadge.classList.toggle("is-hidden", !isNewBest);
     elements.resultCard.classList.toggle("is-new-best", isNewBest);
     showResultCard();
@@ -198,7 +159,6 @@ export function createUI({
 
   setBest(0);
   setSoundMuted(false);
-  showCharge(false);
   showLive(false);
   hideResultCard();
 
@@ -208,9 +168,6 @@ export function createUI({
     setBest,
     showTitle,
     hideTitle,
-    showCharge,
-    setChargeActive,
-    updateCharge,
     showLive,
     updateLive,
     showResult,

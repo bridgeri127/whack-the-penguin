@@ -8,14 +8,12 @@ import { createParticles } from "./src/particles.js";
 import { createAudio } from "./src/audio.js";
 import { createUI } from "./src/ui.js";
 import { initInput } from "./src/input.js";
-import { createFlight } from "./src/physics.js";
+import { createFlight, getLaunchVelocity } from "./src/physics.js";
 import {
-  CHARGE_DOWN_TIME,
-  CHARGE_UP_TIME,
   DROP_GRAVITY,
   DROP_VX,
   DROP_VY,
-  PERFECT_MIN,
+  PENGUIN_JUMP,
   PENGUIN_LAND,
   PENGUIN_LEDGE,
   STATE,
@@ -25,7 +23,7 @@ import {
   YETI_POS,
   getRank,
 } from "./src/constants.js";
-import { clamp, formatMeters, triangleWave } from "./src/utils.js";
+import { clamp, formatMeters } from "./src/utils.js";
 
 const LOOK_RIGHT = 1.12;
 const container = document.getElementById("stage");
@@ -47,9 +45,6 @@ const state = {
   mode: STATE.TITLE,
   modeTime: 0,
   readyT: 0,
-  chargeT: 0,
-  power: 0,
-  perfect: false,
   swingT: 0,
   impactDone: false,
   landT: 0,
@@ -57,7 +52,6 @@ const state = {
   distance: 0,
   best: loadBest(),
   newBest: false,
-  perfectHit: false,
   dropVx: 0,
   dropVy: 0,
   trailTimer: 0,
@@ -102,17 +96,11 @@ function beginRound() {
   audio.play("ui");
   ui.hideTitle();
   ui.hideResult();
-  ui.showCharge(false);
   ui.showLive(false);
-  ui.setChargeActive(false);
   ui.setHint("", false);
 
   state.round += 1;
   state.readyT = 0;
-  state.chargeT = 0;
-  state.power = 0;
-  state.perfect = false;
-  state.perfectHit = false;
   state.swingT = 0;
   state.impactDone = false;
   state.landT = 0;
@@ -132,32 +120,18 @@ function beginRound() {
   setMode(STATE.DROP_READY);
 }
 
-function startCharging() {
+function startSwing() {
   if (state.mode !== STATE.READY) return;
-  setMode(STATE.CHARGING);
-  state.chargeT = 0;
-  state.power = 0;
-  state.perfect = false;
-  audio.startCharge();
-  ui.setChargeActive(true);
-  ui.setHint("", false);
-  cameraRig.setMode("charge");
-}
-
-function releaseCharge() {
-  if (state.mode !== STATE.CHARGING) return;
-  state.perfect = state.power >= PERFECT_MIN;
-  state.perfectHit = state.perfect;
-  audio.stopCharge();
-  audio.play("swing", { power: state.power });
-  ui.setChargeActive(false);
-  ui.showCharge(false);
-  ui.showLive(true);
-  ui.updateLive(0, 0, "SWING");
-  ui.setHint("", false);
   setMode(STATE.SWINGING);
   state.swingT = 0;
   state.impactDone = false;
+  // Timing-based jump: the penguin drops straight down just in front of the yeti.
+  penguin.root.position.set(PENGUIN_JUMP.x, PENGUIN_JUMP.y, 0);
+  penguin.root.rotation.set(0, 0, 0);
+  state.dropVx = 0;
+  state.dropVy = -1.2;
+  audio.play("swing", { power: 1 });
+  ui.setHint("Tap to swing the yeti");
   cameraRig.setMode("swing");
 }
 
@@ -166,17 +140,20 @@ function doImpact() {
   state.impactDone = true;
 
   const clubTip = yeti.getClubTip();
-  particles.impact(clubTip, state.power);
-  cameraRig.kick(0.45 + state.power * 0.75);
-  audio.play("hit", { power: state.power });
+  particles.impact(clubTip, 0.85);
+  cameraRig.kick(0.6);
+  audio.play("hit", { power: 0.8 });
+
+  const strikeAngle = (yeti.getStrikeAngle() * 180) / Math.PI;
   penguin.impact();
 
-  flight.launch(state.power, state.perfect);
+  flight.launch(strikeAngle, penguin.root.position.x, penguin.root.position.y);
+
   state.distance = 0;
   state.trailTimer = 0;
   setMode(STATE.FLYING);
   cameraRig.setMode("flight");
-  ui.updateLive(0, 0, "AIRBORNE");
+  ui.updateLive(0, penguin.root.position.y, "AIRBORNE");
   ui.showLive(true);
 }
 
@@ -231,7 +208,6 @@ function finishRound() {
     bestDistance: state.best,
     isNewBest,
     rank,
-    perfect: state.perfectHit,
   });
   ui.setHint("", false);
   cameraRig.setMode("result");
@@ -277,7 +253,7 @@ function handlePrimary() {
   if (state.mode === STATE.TITLE) {
     beginRound();
   } else if (state.mode === STATE.READY) {
-    startCharging();
+    startSwing();
   } else if (state.mode === STATE.RESULT) {
     beginRound();
   } else if (state.mode === STATE.LANDED && state.landT > 0.65) {
@@ -285,36 +261,16 @@ function handlePrimary() {
   }
 }
 
-function handleRelease() {
-  if (state.mode === STATE.CHARGING) releaseCharge();
-}
-
-function updateCharging(dt) {
-  state.chargeT += dt;
-  const period = CHARGE_UP_TIME + CHARGE_DOWN_TIME;
-  state.power = triangleWave(state.chargeT, period);
-  state.perfect = state.power >= PERFECT_MIN;
-  ui.updateCharge(state.power, state.perfect);
-  audio.updateCharge(state.power);
-
-  penguin.update(dt, clockTime, "charge", { charge: state.power });
-  yeti.update(dt, clockTime, "windup", {
-    charge: state.power,
-    lookAngle: LOOK_RIGHT,
-  });
-}
-
 function updateSwing(dt) {
   state.swingT = Math.min(1, state.swingT + dt / SWING_DURATION);
-  if (!state.impactDone && state.swingT >= SWING_IMPACT_T) {
-    doImpact();
-  }
-
   const swingState = state.swingT < 1 ? "swing" : "follow";
   yeti.update(dt, clockTime, swingState, {
     swingT: state.swingT,
     lookAngle: LOOK_RIGHT,
   });
+  if (!state.impactDone && state.swingT >= SWING_IMPACT_T) {
+    doImpact();
+  }
 }
 
 function updateGame(dt) {
@@ -366,7 +322,6 @@ function updateGame(dt) {
       cameraRig.setMode("ready");
       state.readyT = 0;
       setMode(STATE.READY);
-      ui.showCharge(true);
       ui.setHint("", false);
     }
     return;
@@ -380,18 +335,17 @@ function updateGame(dt) {
     return;
   }
 
-  if (state.mode === STATE.CHARGING) {
-    updateCharging(dt);
-    cameraRig.setMode("charge");
-    return;
-  }
-
   if (state.mode === STATE.SWINGING) {
     updateSwing(dt);
-    penguin.update(dt, clockTime, state.impactDone ? "fly" : "charge", {
-      charge: state.power,
-      spin: flight.state.spin,
-    });
+    if (state.mode === STATE.FLYING) return;
+    if (!state.impactDone) {
+      // Timing-based jump: penguin drops straight down just in front of the yeti.
+      state.dropVy -= DROP_GRAVITY * dt;
+      penguin.root.position.y += state.dropVy * dt;
+      penguin.root.position.x = PENGUIN_JUMP.x;
+      penguin.root.position.z = 0;
+      penguin.update(dt, clockTime, "fall", {});
+    }
     cameraRig.setMode("swing");
     return;
   }
@@ -479,7 +433,7 @@ function animate() {
       : -1.8;
   cameraRig.update(dt, clockTime, {
     penguin: penguin.root.position,
-    charge: state.mode === STATE.CHARGING ? state.power : 0,
+    charge: 0,
   });
   game.update(dt, clockTime, focusX);
   environment.update(dt, clockTime, game.camera, penguin.root.position.x);
@@ -501,7 +455,6 @@ ui = createUI({
 
 initInput({
   onPrimary: handlePrimary,
-  onRelease: handleRelease,
   onSoundToggle: toggleSound,
 });
 
@@ -516,14 +469,10 @@ cameraRig.setMode("title");
 
 window.__PINGU__ = {
   getState: () => state.mode,
-  getPower: () => state.power,
   getDistance: () =>
     state.mode === STATE.FLYING ? flight.state.distance : state.distance,
   getBest: () => state.best,
-  isPerfect: () => state.perfectHit,
   start: () => handlePrimary(),
-  chargeStart: () => startCharging(),
-  chargeRelease: () => releaseCharge(),
   reset: () => beginRound(),
   getPosition: () => ({
     x: penguin.root.position.x,
