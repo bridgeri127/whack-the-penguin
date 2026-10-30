@@ -11,10 +11,7 @@ import { initInput } from "./src/input.js";
 import { createFlight, getLaunchVelocity } from "./src/physics.js";
 import {
   DROP_GRAVITY,
-  DROP_VX,
-  DROP_VY,
   PENGUIN_JUMP,
-  PENGUIN_LAND,
   PENGUIN_LEDGE,
   STATE,
   STORAGE_BEST,
@@ -120,12 +117,22 @@ function beginRound() {
   setMode(STATE.DROP_READY);
 }
 
+function startDrop() {
+  if (state.mode !== STATE.DROP_READY) return;
+  setMode(STATE.DROPPING);
+  penguin.root.position.set(PENGUIN_JUMP.x, PENGUIN_JUMP.y, 0);
+  penguin.root.rotation.set(0, 0, 0);
+  state.dropVx = 0;
+  state.dropVy = -1.2;
+  audio.play("drop");
+}
+
 function startSwing() {
   if (state.mode !== STATE.READY) return;
   setMode(STATE.SWINGING);
   state.swingT = 0;
   state.impactDone = false;
-  // Timing-based jump: the penguin drops straight down just in front of the yeti.
+  // The yeti swings while the penguin is moving; the club strike launches it away.
   penguin.root.position.set(PENGUIN_JUMP.x, PENGUIN_JUMP.y, 0);
   penguin.root.rotation.set(0, 0, 0);
   state.dropVx = 0;
@@ -252,6 +259,8 @@ function handlePrimary() {
   audio.unlock();
   if (state.mode === STATE.TITLE) {
     beginRound();
+  } else if (state.mode === STATE.DROP_READY) {
+    startDrop();
   } else if (state.mode === STATE.READY) {
     startSwing();
   } else if (state.mode === STATE.RESULT) {
@@ -295,14 +304,8 @@ function updateGame(dt) {
       PENGUIN_LEDGE.z,
     );
     penguin.update(dt, clockTime, "ledge", {});
-    yeti.update(dt, clockTime, "title", { lookAngle: 0.4 });
-    cameraRig.setMode("title");
-    if (state.modeTime > 0.38) {
-      state.dropVx = DROP_VX;
-      state.dropVy = DROP_VY;
-      audio.play("drop");
-      setMode(STATE.DROPPING);
-    }
+    yeti.update(dt, clockTime, "idle", { lookAngle: 0.4 });
+    cameraRig.setMode("ready");
     return;
   }
 
@@ -311,16 +314,21 @@ function updateGame(dt) {
     penguin.root.position.x += state.dropVx * dt;
     penguin.root.position.y += state.dropVy * dt;
     penguin.update(dt, clockTime, "fall", {});
-    yeti.update(dt, clockTime, "title", { lookAngle: 0.9 });
+    yeti.update(dt, clockTime, "idle", { lookAngle: 0.9 });
 
     if (penguin.root.position.y <= 0) {
-      penguin.root.position.set(PENGUIN_LAND.x, 0, 0);
+      penguin.root.position.set(penguin.root.position.x, 0, 0);
       penguin.impact();
-      particles.puff(new THREE.Vector3(PENGUIN_LAND.x, 0.08, 0), 22, 1);
+      particles.puff(
+        new THREE.Vector3(penguin.root.position.x, 0.08, 0),
+        22,
+        1,
+      );
       audio.play("land");
       cameraRig.kick(0.18);
       cameraRig.setMode("ready");
       state.readyT = 0;
+      state.dropVy = 0;
       setMode(STATE.READY);
       ui.setHint("", false);
     }
