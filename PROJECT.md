@@ -9,14 +9,14 @@ A stylized 3D recreation of the classic distance-launch game. The player starts 
 
 ## Game flow
 
-| State        | What happens                                                              |
-| ------------ | ------------------------------------------------------------------------- |
-| `title`      | Penguin waits on the ledge; title card is shown.                          |
-| `drop_ready` | Penguin waits on the ledge above the yeti; first tap starts the swing.   |
+| State        | What happens                                                               |
+| ------------ | -------------------------------------------------------------------------- |
+| `title`      | Penguin waits on the ledge; title card is shown.                           |
+| `drop_ready` | Penguin waits on the ledge above the yeti; first tap starts the swing.     |
 | `swinging`   | Penguin jumps down just in front of the yeti; club strikes moving penguin. |
-| `flying`     | Penguin launches at the strike angle, spins, bounces, and camera follows. |
-| `landed`     | Short settle; result card is prepared.                                    |
-| `result`     | Distance, rank, best, share, and replay.                                  |
+| `flying`     | Penguin launches at the strike angle, spins, bounces, and camera follows.  |
+| `landed`     | Short settle; result card is prepared.                                     |
+| `result`     | Distance, rank, best, share, and replay.                                   |
 
 ## Mechanics
 
